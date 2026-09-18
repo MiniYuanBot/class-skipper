@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.venv/
+output/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+input/*
+!input/README.md
+!input/course.yaml
+configs/local*.yaml
+workspace/
