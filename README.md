@@ -54,8 +54,6 @@ The repository launcher uses `.venv` when available.
 ```
 
 Doctor checks text-provider configuration and dependencies without calling an API.
-The private `.env`, local settings and L02–L04 files in the current workspace are
-local setup, not prerequisites bundled for every installation.
 
 ## Generate one lecture
 
