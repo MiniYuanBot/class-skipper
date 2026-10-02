@@ -1,0 +1,4 @@
+interface:
+  display_name: "Class Skipper"
+  short_description: "Study notes from lectures using Codex and subagents"
+  default_prompt: "Use $class-skipper to read all my lecture slides and transcripts, write Chinese notes with subagents, inspect useful diagrams, and revise once."
