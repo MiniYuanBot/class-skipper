@@ -72,7 +72,7 @@ Local parser dependencies, installed only as needed:
 | YAML course manifest | `PyYAML` (read in Codex; expand into prepare calls) |
 
 For binary inputs, install the necessary packages with `<python> -m pip install`.
-Do not install this repository's API client or copy credential configuration.
+These dependencies only parse local files; no model client or credential setup is needed.
 
 ## Prepare and source reading
 

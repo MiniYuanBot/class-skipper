@@ -3,9 +3,9 @@
 The self-contained `skills/class-skipper` folder keeps full-material reading and
 planning, chapter writing, optional selective visual reading, and one editorial
 revision. The current Codex session and available native subagents perform all
-model work. Its Python helpers do not import the legacy model client, read provider
+model work. Its Python helpers do not import a model client, read provider
 environment files, invoke a nested Codex CLI, or make model/OCR network calls.
-The legacy API application is retained separately. The installer copies only the
+The repository contains only the Codex skill and local helpers. The installer copies only the
 skill files and preserves differing installed content. Users place sources in
 `input/`; run data, requests, chapter responses, visual records, drafts, revision
 responses and caches stay in `workspace/`. Structured publication creates an
@@ -50,7 +50,6 @@ now explains line-ending normalization, footnote preservation, and stable upstre
 argument order. Evidence and the note remain under the ignored
 `workspace/skill-forward/result/` folder.
 
-This is a small Codex fixture run, separate from the repository's historical
-provider/course API records. No macOS execution, original full-course run, or human
+This is a small Codex fixture run. No macOS execution, original full-course run, or human
 acceptance was performed. Cross-platform support is implemented with pathlib,
 UTF-8, atomic files and directory locks rather than a Unix launcher or `fcntl`.

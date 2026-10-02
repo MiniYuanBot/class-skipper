@@ -5,8 +5,8 @@ description: Turn complete lecture slides and transcripts into Chinese study not
 
 # Class Skipper
 
-Use the current Codex session for every reasoning task. Never run the legacy
-project's generation CLI, load its `.env`, ask for provider keys, or call a model
+Use the current Codex session for every reasoning task. Never load credential
+environment files, ask for provider keys, or call a model
 SDK, HTTP endpoint, external OCR service, or nested `codex exec`. Local helpers
 only parse documents, render images, cache completed responses, and publish files.
 Codex still requires the user's normal signed-in session and uses its limits;

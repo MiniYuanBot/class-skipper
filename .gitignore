@@ -1,6 +1,5 @@
 .env
 .env.*
-!.env.example
 .venv/
 output/
 __pycache__/
@@ -11,5 +10,4 @@ __pycache__/
 input/*
 !input/README.md
 !input/course.yaml
-configs/local*.yaml
 workspace/
