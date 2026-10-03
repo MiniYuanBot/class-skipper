@@ -105,10 +105,10 @@ every needed unit, to each chapter. Save `plan.json` and cache the complete resp
 Delegate independent chapters in bounded batches. Each writer receives the full
 outline to avoid repetition and all raw units assigned to that chapter. Save one
 complete chapter response per worker. Cache each completed response independently.
-Use the writing guidance in the reference, including knowledge-first narration:
-write directly reusable study notes, not a report of what the instructor or slides
-said. Keep source attribution in footnotes unless the attribution itself has
-learning value. Give each writer these rules in its English task prompt.
+Use the reference's writing guidance and include its shared English writing brief
+in every writer's actual task prompt. Lead with knowledge and necessary conditions;
+use plain language and spend detail on mechanisms, worked examples and derivations.
+Keep routine provenance and evidence-review commentary out of the learning prose.
 Write only the assigned chapter; a
 brief linking sentence can refer to another. Preserve formulas, prerequisites,
 examples and directions of relationships. Label brief added background as
@@ -137,11 +137,12 @@ all original material, plan and verified visual readings. For oversized sources,
 the same editor reads them in bounded ranges; do not substitute summaries for all
 original material. Correct affected sections directly for academic coverage,
 formulas/code/conditions, repetition, teaching clarity and template compliance.
-In this same pass, rewrite classroom meta-narration into direct knowledge statements
-and check concise, consistent lecture/section titles. Preserve meaningful instructor
-emphasis and source citations; do not run another review stage for these checks.
-Preserve rich correct explanations, citations and verified image placement. Do not
-add a score, acceptance gate, independent review stage, or repair loop.
+Include the same English writing brief in the editor's actual task prompt. In this
+pass, remove defensive source commentary, redundant paraphrases and unnecessary
+background; fix bold-label boundaries and check concise, consistent titles.
+Preserve meaningful instructor emphasis, necessary conditions, correct derivations,
+citations and verified image placement. Do not add a score, acceptance gate,
+independent review stage, or repair loop.
 
 Apply this single editorial result, save `revision/review.json` and
 `final/document.json`, then publish with `--document`. Publication creates separate

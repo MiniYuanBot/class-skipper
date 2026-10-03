@@ -207,7 +207,7 @@ Prefer: `延迟描述完成单个任务所需的时间；吞吐率描述单位�
 
 Retain attribution only when the instructor's personal emphasis, exam guidance,
 experience-based judgment, or a special source organization itself has learning
-value. Label it explicitly, e.g. `**课堂强调：**不要将 latency 与 throughput 混淆。`
+value. Label it explicitly, e.g. `**课堂强调**：区分 latency 与 throughput。`
 Such claims must be supported by the supplied material; never invent exam hints or
 turn a personal judgment into a universal fact. Ordinary provenance belongs in
 source footnotes and the source footer, which must remain intact.
@@ -216,6 +216,94 @@ Include these rules in the full English instructions given to chapter writers an
 the editor, covering introductions, synthesis, captions and Q&A as well as chapter
 prose. During the existing single revision, correct meta-narration in place while
 preserving academic content and useful source attribution.
+
+### Knowledge density and emphasis
+
+Lead with the concept, result or rule and its necessary conditions, then explain
+the mechanism or show its application. Use direct verbs and familiar terms. A
+simple definition can be one sentence; a difficult mechanism may need several
+steps, a worked example or a derivation. Density means useful learning per sentence,
+not a word-count target or removing prerequisites and intermediate reasoning.
+
+Experimental limitations belong in the prose only when they change how to use the
+conclusion; express them in one short qualification attached to that conclusion.
+Avoid organizing paragraphs around provenance, evidence sufficiency or imagined
+misreadings (`材料没有说明……`, `不能推广为……`, `不能认为……`). Write the supported
+rule with its scope instead. Real misconceptions may still deserve a direct
+contrast when it teaches a distinction; do not append speculative rebuttals to
+every statement. Never turn a local observation into a universal law.
+
+For example, instead of the SSD paragraph about missing drive types and several
+claims that cannot be inferred, write:
+`SSD 长期断电保存时也可能出现数据错误。一项实验中，约 100 块 SSD 离线三个月后，
+21 块出现错误；该比例仅代表这次实验。` Keep this observation separate from retention
+noise/ECC mechanisms unless the sources actually connect them. Do not equate an
+observed error with unrecoverable data loss, or invent a maintenance interval.
+
+Keep terminology corrections in their corrected form. Put a brief erratum in a
+footnote only when readers need to reconcile an important source discrepancy.
+Unresolved ambiguities affecting a formula, code behavior or learning conclusion
+may go in the lecture's uncertainty list, naming the affected claim and location.
+Routine parser limitations, absent recordings and corrected transcription noise
+belong in workspace review records or the completion report; do not repeat them
+throughout the note or list them as unresolved knowledge issues.
+
+Give each concept one main explanation in the outline. Later chapters may reuse
+it in a new application or link to it; avoid repeating its full definition,
+warnings and examples. Within a section, merge sentences that merely paraphrase
+one another. Cut generic wrap-ups such as `需要一起权衡` unless they name a concrete
+trade-off. Use consistent technical terms instead of vague substitutes such as
+`组织方式`, `参与者` or `作用环节` when the actual component is known.
+If an assigned source unit also contains another topic, read it but explain only
+what serves this chapter; preserve that topic in its own planned chapter instead
+of forcing a connection. Instructor emphasis can preserve the point to study
+without repeating an unsupported universal numerical promise as a headline.
+Split paragraphs that mix several instruction semantics or algorithm phases into
+parallel rules or ordered steps. Keep the assumptions beside the rule they govern.
+
+Add background only to bridge a prerequisite or explain the current mechanism.
+Mark it once as `**补充解释**：…`; do not insert a chain of labeled digressions,
+advanced exceptions or speculative calculations. A toy example must state its
+assumptions and help solve the current problem. Introduce an English term at its
+first useful occurrence rather than repeatedly expanding it. Use tables for
+real parallel comparisons, not to spread a short list into vague cells.
+
+Q&A should exercise prediction, calculation, diagnosis or a consequential
+distinction. Keep answers short, with the decisive reasoning. Do not fill the
+quota with questions whose answers just repeat the preceding definition. The
+question should usually give a concrete situation to work through rather than
+ask `能否直接推出……` again. A genuine misconception question remains useful when
+its answer teaches a necessary distinction. The introduction maps the learning
+problem; the synthesis connects key relationships
+or decisions instead of repeating the introduction or every chapter summary.
+
+### Shared English writing brief
+
+Include this brief verbatim in each chapter writer and editor request, alongside
+the source paths, outline and response contract. These rules also apply to
+introductions, synthesis, captions and Q&A. Hash the updated skill/reference in
+request identity; do not reuse old writing/revision responses under unchanged
+role-only prompts after a guidance update.
+
+> Write Chinese study notes with knowledge, not the class or evidence review, as
+> the subject. Lead with the definition, result or rule and its necessary scope,
+> then explain how it works or apply it. Use plain, precise language; give simple
+> points briefly and spend detail on mechanisms, worked examples and derivations.
+> Preserve prerequisites, symbols, units, code semantics and intermediate reasoning.
+> State experiment limits in one short qualification only when they affect the
+> conclusion; keep routine provenance, transcription corrections and speculative
+> rebuttals out of the prose. Preserve citations and justified instructor emphasis.
+> Do not invent facts, generalize a local result, or silently settle real conflicts.
+> Give concepts one main explanation; remove repeated paraphrases and generic
+> wrap-ups. Split mixed rules into parallel items and algorithms into ordered steps.
+> Keep each chapter focused even if a source unit contains unrelated topics.
+> Add only background needed for the current topic, label it once, and
+> use consistent terms. Prefer concrete tasks in Q&A over repeated questions about
+> whether a broad inference is valid; give concise answers. Write bold labels as
+> `**补充解释**：正文` or `**补充解释：** 正文`, never
+> `**补充解释：**正文`; apply this boundary rule to all punctuation-ending bold
+> labels. Keep Markdown/code/math intact. The editor applies these corrections
+> directly during the existing single revision without adding a review stage.
 
 The workspace draft uses one H1 lecture title, a short learning thread, H2 major
 chapters and H3 concept headings, with optional H4 derivations. Writers return
@@ -227,11 +315,18 @@ Define concepts, explain purpose/mechanism and give a concrete source-backed exa
 Introduce terms as Chinese (English), compare real dimensions in compact tables,
 use numbered process steps and explain mathematical symbols and meanings.
 Use `$...$` and standalone `$$` blocks. Keep meaningful code/pseudocode correct.
-Each chapter ends with 1–3 useful Q&A, usually 1–2; avoid repeating the explanation
-in answers. Do not mechanically fill a fixed checklist or expand into a transcript.
+Each chapter ends with 1–3 useful Q&A, usually 1–2; make them test application or
+reasoning and avoid repeating the explanation in answers. Do not mechanically
+fill a fixed checklist or expand into a transcript.
 
 Normalize Markdown string line endings to `\n` before assembly on either platform;
-preserve spacing inside code and tables. The coordinator attaches draft source
+preserve spacing inside code and tables. For bold labels, keep the colon outside
+the emphasis (`**补充解释**：正文`), or put a space after the closing delimiter
+(`**补充解释：** 正文`). The form `**补充解释：**正文` can fail to close emphasis
+under Markdown delimiter rules. Apply this to `课堂强调`, `勘误`, `阅读提示` and
+other labels as well. In the single revision, inspect emphasis boundaries, heading
+levels, list/table spacing, math delimiters and fenced code without altering literal
+code examples. The coordinator attaches draft source
 footnotes using actual `name-location` (filename, ASCII hyphen, source location;
 no surrounding spaces, for example `L01.pdf-PDF p.4`)
 values from `materials.json`; retain exact unit IDs in artifacts. Add a short
@@ -270,8 +365,12 @@ After applying the editor, write `final/document.json`:
 ```
 
 Section order is the final reading order. IDs are unique and stable. Return raw
-chapter bodies without coordinator-added footnotes; the publisher attaches exact
-source locations. Include editorial additions as complete final sections.
+chapter bodies without coordinator-added footnote definitions; the publisher
+attaches exact source locations. Keep nearby `[^unit-id]` reference markers on
+important numerical results, formulas and source corrections, using real unit IDs
+included in that section's `source_ids`. The chapter source footer remains; nearby
+markers improve traceability without inserting provenance prose. Include editorial
+additions as complete final sections.
 Repeat `--asset` for referenced images. Reference them as `assets/diagram.png` in
 section bodies; publication rewrites them to `../assets/diagram.png` for chapter
 files. The structured publisher creates the output tree above, with relative links,

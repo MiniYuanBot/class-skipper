@@ -47,6 +47,11 @@ PDF/DOCX/PPTX require `pypdfium2`, `python-docx`, and `python-pptx` respectively
 See [workflow.md](skills/class-skipper/references/workflow.md) for offline helper
 commands and artifact contracts.
 
+Notes lead with knowledge and necessary conditions, use plain language, and retain
+useful derivations and examples. The shared writer/editor brief removes defensive
+source commentary, duplicate explanations and unnecessary background, makes Q&A
+test reasoning, and checks Markdown bold-label boundaries in the same revision.
+
 ## Skill input, intermediate and output layout
 
 Open the notebook root as the Obsidian vault. Its `.obsidian/` stays there; each

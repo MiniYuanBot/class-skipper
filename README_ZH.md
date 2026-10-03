@@ -42,6 +42,10 @@ python3 tools/install_skill.py
 `pypdfium2`、`python-docx`、`python-pptx`。离线命令与中间文件约定见
 [workflow.md](skills/class-skipper/references/workflow.md)。
 
+笔记优先给出知识结论及必要条件，用简单语言表达，并保留有用的推导和例子。
+写作者与编辑共用同一写作提示：减少围绕证据和误读的防御性说明、重复讲解及
+无关补充，让问答检验实际推理，并在原有一次校订中检查 Markdown 加粗标签边界。
+
 ## Skill 的输入、中间文件和输出结构
 
 以笔记总根目录作为 Obsidian 仓库，`.obsidian/` 保留在该层。每门课程有独立的
