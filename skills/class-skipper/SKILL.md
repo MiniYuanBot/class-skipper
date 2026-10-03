@@ -22,7 +22,13 @@ Unix lock module, or system-wide Python installation is required.
 
 ## Inputs and execution
 
-Use the current project folder as `<root>` unless the user specifies another root.
+The user-selected notebook/vault root contains `.obsidian/` and
+one folder per course. Use the **course folder** as `<root>`, for example
+`<notebook-root>/<course-folder>/`, with its own `input/`,
+`output/` and `workspace/`. When invoked from a vault root, select the course from
+the request, manifest or source paths; ask only if the course is ambiguous. When
+invoked inside a course folder, use that folder unless the user specifies another.
+Do not create or change `.obsidian/`, or treat `output/` as a separate vault.
 Users put lecture materials in `<root>/input/`; inspect that folder completely and
 use its manifest when present. Preserve subfolders and every supplied file; group
 slides and transcripts by course/lecture only when their names or manifest support
@@ -31,8 +37,18 @@ Explicitly supplied paths outside input remain valid; do not move the originals.
 Keep **all intermediates** in `<root>/workspace/` and publish **only final notes,
 navigation indexes and referenced images** in `<root>/output/`. Read the canonical
 directory and format contract in the reference; do not invent run filenames.
+New output is `<root>/output/index.md` plus `<root>/output/LXX/index.md` and
+`LXX/chapters/*.md`; referenced images live in `LXX/assets/` when needed. There is
+no repeated course-ID folder under output or workspace. New runs use
+`workspace/LXX/<run-id>/`; normalize numbered lecture IDs to uppercase `LXX`
+(e.g. `l2` or `02` becomes `L02`). Preserve old runs, caches and manual notes at
+their existing paths; do not automatically migrate earlier layouts.
 
 Infer course/lecture IDs, title and language from the request and input structure.
+Use lecture display titles `LXX Topic` (for example, `L02 进程与线程`), with
+at least two digits and the source/manifest lecture number. Keep internal IDs and
+paths stable. Use concise section display titles `NN Topic` (for example,
+`01 进程模型`) in final reading order. Read the naming rules in the reference.
 Ask only for necessary missing input. Default notes to Chinese,
 figures to selective use when they help, and reuse to matching complete cached
 responses. A request to refresh bypasses lookup but preserves previous responses.
@@ -89,7 +105,11 @@ every needed unit, to each chapter. Save `plan.json` and cache the complete resp
 Delegate independent chapters in bounded batches. Each writer receives the full
 outline to avoid repetition and all raw units assigned to that chapter. Save one
 complete chapter response per worker. Cache each completed response independently.
-Use the writing guidance in the reference. Write only the assigned chapter; a
+Use the writing guidance in the reference, including knowledge-first narration:
+write directly reusable study notes, not a report of what the instructor or slides
+said. Keep source attribution in footnotes unless the attribution itself has
+learning value. Give each writer these rules in its English task prompt.
+Write only the assigned chapter; a
 brief linking sentence can refer to another. Preserve formulas, prerequisites,
 examples and directions of relationships. Label brief added background as
 `补充解释`; do not invent lecturer statements or exam emphasis.
@@ -117,13 +137,19 @@ all original material, plan and verified visual readings. For oversized sources,
 the same editor reads them in bounded ranges; do not substitute summaries for all
 original material. Correct affected sections directly for academic coverage,
 formulas/code/conditions, repetition, teaching clarity and template compliance.
+In this same pass, rewrite classroom meta-narration into direct knowledge statements
+and check concise, consistent lecture/section titles. Preserve meaningful instructor
+emphasis and source citations; do not run another review stage for these checks.
 Preserve rich correct explanations, citations and verified image placement. Do not
 add a score, acceptance gate, independent review stage, or repair loop.
 
 Apply this single editorial result, save `revision/review.json` and
 `final/document.json`, then publish with `--document`. Publication creates separate
-chapter notes with Obsidian properties, images and source footnotes, plus root,
-course and lecture `index.md` files. Do not publish a full monolithic draft instead
+chapter notes with Obsidian properties, images and source footnotes. Each chapter
+must have previous/next section links at both top and bottom, plus directory links;
+use final section order, omit nonexistent neighbors and never link across lectures.
+Publication also creates the course's `output/index.md` and each lecture's
+`output/LXX/index.md`. Do not publish a full monolithic draft instead
 of the chapter structure. If the user skips revision, record it as skipped. If revision fails,
 retain the draft with a visible notice and completed chapters; do not discard them
 or claim revision completed. Uncertainties should name only material issues that

@@ -1,45 +1,69 @@
 # Local operations and artifact contracts
 
 The helper is self-contained. Use `<python>` for the selected Python 3.11+
-interpreter, `<skill>` for the installed folder, and `<root>` for the user's output
-workspace. Windows and macOS use the same arguments; quote paths with spaces.
+interpreter, `<skill>` for the installed folder, and `<root>` for one course folder
+beneath the notebook/Obsidian vault root. Windows and macOS use the same arguments; quote paths with spaces.
 All files written by Codex must use UTF-8. Text input is UTF-8 (BOM accepted).
 
 ## Canonical directories
 
-Use this structure for every new skill run. IDs are portable names; human-readable
-Chinese titles are note properties and headings, not inferred filenames.
+Use this structure for every new skill run. The notebook root holds `.obsidian/`
+and sibling course folders. `<root>` and helper `--root` mean one course folder,
+not the notebook root. Course IDs remain metadata, not repeated subdirectories.
+Human-readable titles remain note properties/headings; lecture directories use
+uppercase `LXX`, padded to at least two digits. The standard subfolder is `chapters/`.
 
 ```text
-<root>/
-  input/                         User source files only
-    course.yaml                  Optional manifest; paths relative to this file
-    os/l02/slides.pdf
-    os/l02/transcript.docx
-  workspace/                     Private intermediate work; never import into Obsidian
-    os/l02/<run-id>/
-      run.json                   Version, source identity, root, IDs, title, options
-      materials.json             Complete sources, located units, parser warnings
-      status.json                Four-step progress and publication result
-      plan.json                  Full lecture plan
-      requests/                  One exact request JSON per reasoning task
-      chapters/section-1.json     Completed chapter response (not published Markdown)
-      visuals/readings.json      Verified/skipped visual records
-      visuals/pages/             Rendered original PDF pages
-      visuals/crops/             Candidate and verified crops
-      draft/notes.md             Assembled draft for the single editor
-      revision/review.json       The single editorial response
-      final/document.json        Corrected structured lecture for publication
-      cache/                     Completed responses and refresh history
-    publication/                 Protected structured-output receipts and registry
-  output/                        Final Obsidian-compatible library only
-    index.md                     Course navigation
-    os/index.md                  Lecture navigation
-    os/l02/index.md              Learning thread, chapter navigation, synthesis
-    os/l02/chapters/section-1.md  One Markdown note per major planned section
-    os/l02/chapters/section-2.md
-    os/l02/assets/diagram.png    Only images referenced by published chapters
+<notebook-root>/                 User-selected Obsidian vault root
+  .obsidian/                    Existing vault configuration; never modify
+  computer-organization-and-architecture/  <root>: one course
+    input/                      User source files only
+      course.yaml               Optional manifest; paths relative to this file
+      L02/slides.pdf
+      L02/transcript.docx
+    workspace/                  Private intermediates
+      course.json               Course-root identity and directory-layout marker
+      L02/<run-id>/
+        run.json                Version, source identity, root, IDs, title, options
+        materials.json          Complete sources, located units, parser warnings
+        status.json             Four-step progress and publication result
+        plan.json               Full lecture plan
+        requests/               One exact request JSON per reasoning task
+        chapters/section-1.json  Completed chapter response
+        visuals/readings.json   Verified/skipped visual records
+        visuals/pages/          Rendered original PDF pages
+        visuals/crops/          Candidate and verified crops
+        draft/notes.md          Assembled draft for the single editor
+        revision/review.json     The single editorial response
+        final/document.json     Corrected structured lecture for publication
+        cache/                  Completed responses and refresh history
+      publication/              Protected output receipts and course registry
+      exports/                  Export receipts and conflict candidates
+    output/                     Final notes for this course only
+      index.md                  Ordered lecture navigation
+      L02/
+        index.md                Learning thread, chapter navigation, synthesis
+        chapters/section-1.md    One Markdown note per major planned section
+        chapters/section-2.md
+        assets/diagram.png      Only when a chapter references this image
+      L03/
+        index.md
+        chapters/...
+  operating-systems/            Another independent course root
+    input/
+    output/
+    workspace/
 ```
+
+Resolve the course folder from the request, manifest or source paths. Do not put
+input/output/workspace directly under a vault root or add a course-ID layer within
+output/workspace. `prepare` accepts `2`, `02`, `l2` or `L02` and stores `L02`; a
+non-numbered lecture needs its actual lecture number before preparation. Each
+course root is bound to one course ID. Do not rename input folders automatically.
+New run metadata records `layout: "course-root-v1"`. Existing run metadata without
+that marker retains the earlier workspace/course/lecture structure for resume,
+publication and export. Do not move or delete existing runs or outputs to adopt
+the new layout; generate new notes in the selected course folder.
 
 Do not scatter temporary pages, logs, JSON, drafts or cache files into input/output.
 Use the prepared run's subfolders for agent-owned work. A failed or incomplete run
@@ -77,7 +101,7 @@ These dependencies only parse local files; no model client or credential setup i
 ## Prepare and source reading
 
 ```text
-<python> <skill>/scripts/local.py prepare --root <root> --course os --lecture l02 --title "操作系统" --slides "<slides.pdf>" --transcript "<transcript.docx>"
+<python> <skill>/scripts/local.py prepare --root <root> --course os --lecture L02 --title "L02 进程与线程" --slides "<slides.pdf>" --transcript "<transcript.docx>"
 ```
 
 Repeat `--slides`/`--transcript` to include all files; transcripts are optional.
@@ -145,6 +169,54 @@ the same key is preserved rather than replaced.
 
 ## Writing and assembly
 
+### Concise, consistent titles
+
+Use `LXX Topic` for every lecture display title: uppercase `L`, the actual lecture
+number padded to at least two digits, one space, and a concise topic phrase, e.g.
+`L02 进程与线程`. Use the same title in the plan, draft H1, final document, lecture
+index H1/YAML title and course index link. Derive the number from source names or
+the manifest; do not confuse a course title with a lecture topic or invent a number.
+If the number cannot be established, ask for it before publication. Preserve stable
+course/lecture IDs and paths; a display-title change is not an ID rename.
+
+Use `NN Topic` for major section titles, e.g. `01 进程模型`, `02 线程与并发`.
+Number them in final reading order, including editorial additions, and use the
+same title in the plan, draft, final sections, chapter H1/YAML title and navigation
+labels. Preserve section IDs when renumbering display titles. Aim for 4–12 Chinese
+characters in the topic phrase when natural; clarity takes priority over a rigid
+length limit. Use parallel noun phrases, avoid subtitles or lists of every covered
+concept. H3/H4 concept headings in writer bodies remain short, parallel phrases
+without repeated lecture/section prefixes.
+
+### Knowledge-first narration
+
+The final notes must make knowledge itself the subject of the narration. Write
+self-contained statements a student can study directly: definitions, mechanisms,
+relationships, conditions, reasoning and examples. Do not merely summarize the
+sequence or presentation of a class, slide deck or transcript.
+
+Rewrite routine classroom meta-narration such as `讲师用……说明……`, `老师指出……`,
+`课件以……为例……`, `PPT 展示了……`, `本页介绍……`, `随后讲师讲解……` and
+`课程首先……然后……`. Apply this principle to equivalent wording, not just these
+exact phrases. Keep the underlying knowledge, source-backed example and conditions;
+do not simply delete the attribution and leave a vague sentence.
+
+Avoid: `讲师用流水线的例子说明吞吐率与延迟的区别。`
+Prefer: `延迟描述完成单个任务所需的时间；吞吐率描述单位时间内能够完成的任务数量。
+流水线主要提升吞吐率，而不一定降低单个任务的延迟。`
+
+Retain attribution only when the instructor's personal emphasis, exam guidance,
+experience-based judgment, or a special source organization itself has learning
+value. Label it explicitly, e.g. `**课堂强调：**不要将 latency 与 throughput 混淆。`
+Such claims must be supported by the supplied material; never invent exam hints or
+turn a personal judgment into a universal fact. Ordinary provenance belongs in
+source footnotes and the source footer, which must remain intact.
+
+Include these rules in the full English instructions given to chapter writers and
+the editor, covering introductions, synthesis, captions and Q&A as well as chapter
+prose. During the existing single revision, correct meta-narration in place while
+preserving academic content and useful source attribution.
+
 The workspace draft uses one H1 lecture title, a short learning thread, H2 major
 chapters and H3 concept headings, with optional H4 derivations. Writers return
 bodies with H3/H4 only. Publication splits this into one note per major chapter;
@@ -160,9 +232,10 @@ in answers. Do not mechanically fill a fixed checklist or expand into a transcri
 
 Normalize Markdown string line endings to `\n` before assembly on either platform;
 preserve spacing inside code and tables. The coordinator attaches draft source
-footnotes using actual `name · location`
+footnotes using actual `name-location` (filename, ASCII hyphen, source location;
+no surrounding spaces, for example `L01.pdf-PDF p.4`)
 values from `materials.json`; retain exact unit IDs in artifacts. Add a short
-`本讲小结` and only specific unresolved `待核验与阅读提示` when necessary. Incomplete
+`本讲小结` and only specific unresolved `不确定事项` when necessary. Incomplete
 chapters use a visible `本节生成暂未完成` notice and remain local. When applying the
 editor's replacements, retain existing citations and avoid appending duplicate
 footnote definitions that the editor already preserved.
@@ -187,7 +260,7 @@ images in the draft. Do not fabricate figures or model-generated replacements.
 
 ```text
 <python> <skill>/scripts/local.py publish --run <run> --document <run>/final/document.json --asset <run>/visuals/crops/diagram.png
-<python> <skill>/scripts/local.py export --root <root> --course os --vault "<vault-root>" --course-name "操作系统"
+<python> <skill>/scripts/local.py export --root <root> --course os --vault "<vault-root>" --course-name "operating-systems"
 ```
 
 After applying the editor, write `final/document.json`:
@@ -201,16 +274,26 @@ chapter bodies without coordinator-added footnotes; the publisher attaches exact
 source locations. Include editorial additions as complete final sections.
 Repeat `--asset` for referenced images. Reference them as `assets/diagram.png` in
 section bodies; publication rewrites them to `../assets/diagram.png` for chapter
-files. The structured publisher creates the output tree above, with relative links
-and parent-index backlinks. Hash receipts preserve manual changes in notes, assets
+files. The structured publisher creates the output tree above, with relative links,
+parent-index backlinks and previous/next section links. The publisher derives
+neighbors from the final `sections` list, including editorial additions; section
+IDs or filesystem sort order must not determine reading order. Writers return
+content only: the publisher owns navigation so links cannot be stale or duplicated.
+Hash receipts preserve manual changes in notes, assets
 and indexes; conflicting output stays in a candidate folder. Compare it without
 overwriting the user's file. Export copies existing complete notes and referenced
 images to the requested Obsidian course folder without regenerating content.
 Inspect the JSON result and process exit code; conflicts are preserved, not success.
-No Obsidian plugin or `.obsidian` settings change is needed. Open `output/` as a
-vault and start at `index.md`. Structured export to an existing vault creates
-`<vault>/<course-name>/index.md` plus `<course-id>/index.md` and its lecture/chapters
-tree, forming a complete single-course library with valid relative backlinks.
+Open the notebook root (the folder containing `.obsidian/`) as the vault and
+start at `<course-folder>/output/index.md`. Publishing inside that vault already
+completes the requested layout; no export is needed. Optional export from a separate
+course workspace creates `<vault>/<course-name>/output/index.md` and
+`output/LXX/{index.md,chapters/,...}`, with empty `input/` and `workspace/` siblings
+if absent. It copies only published notes/referenced images, preserves existing
+inputs/intermediates and manual edits, and never copies source material, caches or
+`.obsidian` configuration. Relative links retain the same depth after export.
+No notebook-wide index is required or generated. Earlier runs keep their legacy
+export behavior. Do not use legacy export for new course-root runs.
 The legacy `--note` option supports earlier single-file publications only; new
 skill runs must use `--document`.
 
@@ -218,15 +301,26 @@ skill runs must use `--document`.
 
 All notes and indexes begin with YAML properties. Use `schema_version: 1`, `type`,
 `title`; course-level files also have `course`, lecture-level files have `lecture`,
-and chapter files have `section`. Types are `library-index`, `course-index`,
+and chapter files have `section`. New layout types are `course-index`,
 `lecture-index` and `course-note`. Properties use quoted human-readable titles and
 stable IDs. Do not insert private absolute paths, prompts, cache identifiers or
 execution logs into the published note.
 
-Each chapter contains its title, a parent-index link, the conceptual explanation
+Each chapter contains its title, top and bottom navigation, the conceptual explanation
 with formulas/examples/comparisons, verified diagrams beside matching prose,
 1–3 Q&A and a source-location footer. The lecture index contains its title,
 parent-index link, learning thread, ordered chapter links, synthesis and only
-material unresolved questions. Root/course indexes contain ordered links to the
-next level. Standard Markdown links, LaTeX and footnotes work in Obsidian without
+material unresolved questions. The course's `output/index.md` contains ordered
+lecture links directly, e.g. `[L02 进程与线程](L02/index.md)`. Standard Markdown links, LaTeX and footnotes work in Obsidian without
 plugins; avoid custom code blocks for internal status data.
+
+Chapter navigation retains lecture/course directory links and adds
+`[上一节：NN Topic](previous-id.md)` and `[下一节：NN Topic](next-id.md)` at both
+the top (below H1) and the bottom (after the source footer). Use sibling-relative
+Markdown links and final display titles. Omit the previous link on the first
+section and the next link on the last; a single-section lecture has only directory
+links. Do not wrap around or cross into another lecture. The same links must remain
+valid after export to Obsidian. In the new layout, chapter directory links are
+`[本讲目录](../index.md)` and `[课程目录](../../index.md)`; lecture indexes link to
+`[课程目录](../index.md)`. Do not generate an `全部课程` link to a nonexistent parent
+index. Notebook-wide navigation is outside this course publisher's scope.

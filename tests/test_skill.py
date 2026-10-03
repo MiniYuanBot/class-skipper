@@ -1,6 +1,7 @@
 """Offline skill helper checks with real tiny parsers; no model or course/API run."""
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,7 +38,9 @@ class OfflineSkillTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
-        self.root = self.base / "notes workspace"
+        self.vault = self.base / "test-vault"
+        (self.vault / ".obsidian").mkdir(parents=True)
+        self.root = self.vault / "computer-organization-and-architecture"
         self.text = self.base / "lecture.txt"
         self.text.write_text(
             "完整文本\n" + "长段落\n" * 1200 + "TAIL 必要条件", encoding="utf-8-sig"
@@ -69,6 +72,19 @@ class OfflineSkillTests(unittest.TestCase):
             self.text,
             *extra,
         )
+
+    def prepare_legacy(self):
+        prepared = self.prepare()
+        run = Path(prepared["run"])
+        metadata = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        metadata.pop("layout")
+        metadata["lecture"] = "01"
+        old_run = self.root / "workspace" / "demo" / "01" / run.name
+        old_run.parent.mkdir(parents=True)
+        shutil.move(str(run), old_run)
+        (old_run / "run.json").write_text(json.dumps(metadata), encoding="utf-8")
+        (self.root / "workspace" / "course.json").unlink()
+        return str(old_run)
 
     def write_json(self, filename, value):
         path = self.base / filename
@@ -149,11 +165,11 @@ class OfflineSkillTests(unittest.TestCase):
         output = self.root / "output"
         self.assert_local_links(output)
         self.assertEqual(result["chapters"], 2)
-        chapter = output / "demo" / "01" / "chapters" / "concept.md"
+        chapter = output / "L01" / "chapters" / "concept.md"
         body = chapter.read_text(encoding="utf-8")
         self.assertIn('type: "course-note"', body)
         self.assertIn('section: "concept"', body)
-        self.assertIn("lecture.txt — Text segment 1", body)
+        self.assertIn("lecture.txt-Text segment 1", body)
         self.assertIn("../assets/figure.png", body)
         self.assertIn("\n## 定义\n", body)
         self.assertIn("\n### 细节\n", body)
@@ -171,10 +187,10 @@ class OfflineSkillTests(unittest.TestCase):
         self.assertIn("index.md", conflict["conflicts"])
         self.assertEqual(root_index.read_text(encoding="utf-8"), "manual library navigation")
         root_index.write_bytes((Path(conflict["candidate"]) / "index.md").read_bytes())
-        chapter = self.root / "output" / "demo" / "01" / "chapters" / "concept.md"
+        chapter = self.root / "output" / "L01" / "chapters" / "concept.md"
         chapter.write_text("manual chapter correction", encoding="utf-8")
         conflict = self.cli(*command, expected=5)
-        self.assertIn("demo/01/chapters/concept.md", conflict["conflicts"])
+        self.assertIn("L01/chapters/concept.md", conflict["conflicts"])
         self.assertEqual(chapter.read_text(encoding="utf-8"), "manual chapter correction")
 
     def test_structured_export_preserves_full_navigation_and_manual_edits(self):
@@ -193,11 +209,63 @@ class OfflineSkillTests(unittest.TestCase):
         result = self.cli(*command)
         target = Path(result["target"])
         self.assert_local_links(target)
-        chapter = target / "demo" / "01" / "chapters" / "concept.md"
+        self.assertEqual({p.name for p in target.iterdir()}, {"input", "output", "workspace"})
+        self.assertEqual(list((target / "input").iterdir()), [])
+        self.assertEqual(list((target / "workspace").iterdir()), [])
+        self.assertFalse((target / ".obsidian").exists())
+        chapter = target / "output" / "L01" / "chapters" / "concept.md"
         self.assertTrue(chapter.is_file())
         chapter.write_text("edited in Obsidian", encoding="utf-8")
         self.cli(*command, expected=5)
         self.assertEqual(chapter.read_text(encoding="utf-8"), "edited in Obsidian")
+
+    def test_legacy_structured_runs_retain_original_paths(self):
+        run = self.prepare_legacy()
+        document = self.document(
+            [
+                {
+                    "id": "concept",
+                    "title": "概念",
+                    "markdown": "### 定义\n\n知识正文。",
+                    "source_ids": ["s1b1"],
+                }
+            ]
+        )
+        result = self.cli("publish", "--run", run, "--document", document)
+        output = self.root / "output"
+        self.assertEqual(Path(result["lecture_index"]), output / "demo/01/index.md")
+        self.assert_local_links(output)
+        original = Path(result["lecture_index"]).read_bytes()
+        self.cli(
+            "prepare",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--lecture",
+            "L02",
+            "--title",
+            "L02 新讲",
+            "--slides",
+            self.text,
+            expected=2,
+        )
+        self.assertFalse((self.root / "workspace/course.json").exists())
+        self.assertEqual(Path(result["lecture_index"]).read_bytes(), original)
+        exported = self.cli(
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "export-vault",
+            "--course-name",
+            "旧课程",
+        )
+        target = Path(exported["target"])
+        self.assertTrue((target / "demo/01/chapters/concept.md").is_file())
+        self.assert_local_links(target)
 
     def test_structured_invalid_ids_and_removes_only_unchanged_stale_chapters(self):
         prepared, _, command = self.publish_document()
@@ -217,7 +285,7 @@ class OfflineSkillTests(unittest.TestCase):
         body["sections"][1]["id"] = "condition"
         body["sections"] = [body["sections"][1]]
         document.write_text(json.dumps(body), encoding="utf-8")
-        lecture = self.root / "output" / "demo" / "01"
+        lecture = self.root / "output" / "L01"
         stale = lecture / "chapters" / "concept.md"
         original = stale.read_bytes()
         stale.write_text("manual correction in retired chapter", encoding="utf-8")
@@ -246,7 +314,76 @@ class OfflineSkillTests(unittest.TestCase):
                 asset,
             )
         index = Path(result["course_index"]).read_text(encoding="utf-8")
-        self.assertLess(index.index("](l2/index.md)"), index.index("](l10/index.md)"))
+        self.assertLess(index.index("](L02/index.md)"), index.index("](L10/index.md)"))
+
+    def test_chapter_neighbors_follow_final_order_and_survive_export(self):
+        prepared = self.prepare()
+        sections = [
+            {
+                "id": section_id,
+                "title": title,
+                "markdown": "### 定义\n\n知识正文。",
+                "source_ids": ["s1b1"],
+            }
+            for section_id, title in (
+                ("section-9", "01 延迟"),
+                ("added-topic", "02 流水线"),
+                ("section-1", "03 吞吐率"),
+            )
+        ]
+        document = self.document(sections)
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        output = self.root / "output"
+        self.assert_local_links(output)
+        for position, section in enumerate(sections):
+            body = (output / "L01/chapters" / (section["id"] + ".md")).read_text(encoding="utf-8")
+            self.assertEqual(body.count("上一节："), 2 if position > 0 else 0)
+            self.assertEqual(body.count("下一节："), 2 if position < len(sections) - 1 else 0)
+            for neighbor, label in ((position - 1, "上一节"), (position + 1, "下一节")):
+                if 0 <= neighbor < len(sections):
+                    target = sections[neighbor]
+                    link = f"[{label}：{target['title']}]({target['id']}.md)"
+                    self.assertEqual(body.count(link), 2)
+                    self.assertLess(body.index(link), body.index("## 定义"))
+                    self.assertGreater(body.rindex(link), body.index("[^s1b1]:"))
+        exported = self.cli(
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "vault",
+            "--course-name",
+            "课程",
+        )
+        target = Path(exported["target"])
+        self.assert_local_links(target)
+        for section in sections:
+            relative = Path("L01/chapters") / (section["id"] + ".md")
+            self.assertEqual(
+                (target / "output" / relative).read_bytes(), (output / relative).read_bytes()
+            )
+
+    def test_single_chapter_has_no_neighbor_links(self):
+        prepared = self.prepare()
+        document = self.document(
+            [
+                {
+                    "id": "only",
+                    "title": "01 性能指标",
+                    "markdown": "### 定义\n\n知识正文。",
+                    "source_ids": ["s1b1"],
+                }
+            ]
+        )
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        output = self.root / "output"
+        self.assert_local_links(output)
+        body = (output / "L01/chapters/only.md").read_text(encoding="utf-8")
+        self.assertNotIn("上一节：", body)
+        self.assertNotIn("下一节：", body)
+        self.assertEqual(body.count("[本讲目录](../index.md)"), 2)
 
     def test_complete_utf8_materials_identity_and_no_repository_dependency(self):
         first = self.prepare()
@@ -307,7 +444,7 @@ class OfflineSkillTests(unittest.TestCase):
         self.assertTrue(Path(stored["cache"]).exists())
 
     def test_publish_assets_note_and_index_manual_protection(self):
-        run = self.prepare()["run"]
+        run = self.prepare_legacy()
         note = self.base / "final.md"
         note.write_text("# 内容\n\n![原图](assets/figure.png)\n", encoding="utf-8")
         asset = self.base / "figure.png"
@@ -340,7 +477,7 @@ class OfflineSkillTests(unittest.TestCase):
         self.assertEqual(index.read_text(encoding="utf-8"), "manual index")
 
     def test_export_preserves_manual_edits_and_rewrites_images(self):
-        run = self.prepare()["run"]
+        run = self.prepare_legacy()
         note = self.base / "final.md"
         note.write_text("# Notes\n\n![Figure](assets/figure.png)", encoding="utf-8")
         asset = self.base / "figure.png"
@@ -366,8 +503,11 @@ class OfflineSkillTests(unittest.TestCase):
         self.cli(*command, expected=5)
         self.assertEqual(exported.read_text(encoding="utf-8"), "manual vault note")
 
-    def test_portable_names_reject_case_collisions(self):
-        self.prepare(lecture="Lesson")
+    def test_portable_names_and_lecture_normalization(self):
+        first = self.prepare(lecture="l1")
+        self.assertEqual(first["run"], self.prepare(lecture="01")["run"])
+        output = self.root / "output"
+        (output / "l02").mkdir()
         self.cli(
             "prepare",
             "--root",
@@ -375,9 +515,75 @@ class OfflineSkillTests(unittest.TestCase):
             "--course",
             "demo",
             "--lecture",
-            "lesson",
+            "L02",
             "--title",
             "Collision",
+            "--slides",
+            self.text,
+            expected=2,
+        )
+        for course, lecture in (("CON", "L01"), ("demo", "Lesson")):
+            self.cli(
+                "prepare",
+                "--root",
+                self.root,
+                "--course",
+                course,
+                "--lecture",
+                lecture,
+                "--title",
+                "Invalid",
+                "--slides",
+                self.text,
+                expected=2,
+            )
+
+    def test_course_roots_are_isolated_and_vault_settings_are_untouched(self):
+        settings = self.vault / ".obsidian" / "app.json"
+        settings.write_text('{"keep":true}', encoding="utf-8")
+        prepared, result, _ = self.publish_document()
+        self.assertEqual(Path(prepared["run"]).parent, self.root / "workspace/L01")
+        self.assertEqual(Path(result["course_index"]), self.root / "output/index.md")
+        self.assertEqual({p.name for p in (self.root / "output").iterdir()}, {"index.md", "L01"})
+        self.assertFalse((self.root / ".obsidian").exists())
+        second = self.vault / "operating-systems"
+        other = self.cli(
+            "prepare",
+            "--root",
+            second,
+            "--course",
+            "os",
+            "--lecture",
+            "2",
+            "--title",
+            "L02 进程",
+            "--slides",
+            self.text,
+        )
+        asset = self.base / "figure.png"
+        self.cli(
+            "publish",
+            "--run",
+            other["run"],
+            "--document",
+            self.base / "document.json",
+            "--asset",
+            asset,
+        )
+        self.assertTrue((second / "output/L02/index.md").is_file())
+        self.assertFalse((second / "output/L01").exists())
+        self.assertFalse((self.root / "output/L02").exists())
+        self.assertEqual(settings.read_text(encoding="utf-8"), '{"keep":true}')
+        self.cli(
+            "prepare",
+            "--root",
+            self.root,
+            "--course",
+            "another",
+            "--lecture",
+            "L02",
+            "--title",
+            "L02 其他课程",
             "--slides",
             self.text,
             expected=2,
@@ -385,17 +591,26 @@ class OfflineSkillTests(unittest.TestCase):
         self.cli(
             "prepare",
             "--root",
-            self.root,
+            self.vault,
             "--course",
-            "CON",
+            "demo",
             "--lecture",
-            "01",
+            "L01",
             "--title",
-            "Reserved",
+            "L01 错误根目录",
             "--slides",
             self.text,
             expected=2,
         )
+        self.assertFalse((self.vault / "output").exists())
+
+    def test_new_runs_reject_legacy_note_publication_and_keep_sources(self):
+        prepared = self.prepare()
+        note = self.base / "final.md"
+        note.write_text("# 内容", encoding="utf-8")
+        self.cli("publish", "--run", prepared["run"], "--note", note, expected=2)
+        self.assertTrue(self.text.is_file())
+        self.assertEqual(list((self.root / "output").iterdir()), [])
 
     def test_real_docx_and_pptx_parser_fixtures(self):
         from docx import Document

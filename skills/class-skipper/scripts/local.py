@@ -12,6 +12,7 @@ from materials import read_materials, render_page
 from storage import atomic, digest, managed, read_json, slug, write_json
 
 PARSER_VERSION = 1
+COURSE_LAYOUT = "course-root-v1"
 IMAGE = re.compile(r"!\[([^\]]*)\]\(([^()]+)\)")
 
 
@@ -40,15 +41,32 @@ def lock(directory):
         directory.rmdir()
 
 
+def lecture_id(value):
+    match = re.fullmatch(r"[Ll]?(\d+)", value)
+    if not match:
+        raise ValueError("Lecture must be a number or LXX, for example L02.")
+    return slug(f"L{int(match[1]):02d}")
+
+
 def prepare(args):
-    course, lecture = slug(args.course), slug(args.lecture)
-    if lecture.lower() == "index":
-        raise ValueError("Lecture ID index is reserved.")
+    course, lecture = slug(args.course), lecture_id(args.lecture)
     root = managed(Path(args.root).expanduser())
-    managed(root, "input").mkdir(parents=True, exist_ok=True)
+    if (root / ".obsidian").exists():
+        raise ValueError("--root must be a course folder below the Obsidian vault root.")
+    registry_path = managed(root, "workspace", "publication", "courses.json")
+    if registry_path.exists() and any(
+        entry.get("layout") != COURSE_LAYOUT for entry in read_json(registry_path).values()
+    ):
+        raise ValueError("Existing library layout preserved; choose a separate course root.")
+    if managed(root, "workspace", course, "publication", "published.json").exists():
+        raise ValueError("Existing legacy output preserved; choose a separate course root.")
+    course_record = managed(root, "workspace", "course.json")
+    if course_record.exists() and read_json(course_record)["course"] != course:
+        raise ValueError("This course root is already assigned to another course.")
+    for name in ("input", "workspace", "output"):
+        managed(root, name).mkdir(parents=True, exist_ok=True)
     for parent in (root / "workspace", root / "output"):
-        portable_id(parent, course)
-        portable_id(parent / course, lecture)
+        portable_id(parent, lecture)
     materials = read_materials(args.slides or [], args.transcript or [])
     if not materials["sources"]:
         raise ValueError("Provide at least one slide or transcript source.")
@@ -58,13 +76,18 @@ def prepare(args):
     identity = {
         "schema_version": 1,
         "parser_version": PARSER_VERSION,
+        "layout": COURSE_LAYOUT,
         "course": course,
         "lecture": lecture,
         "title": args.title,
         "options": options,
         "sources": materials["sources"],
     }
-    run = managed(root, "workspace", course, lecture, digest(identity)[:24])
+    with lock(root / "workspace" / ".course-lock"):
+        if course_record.exists() and read_json(course_record)["course"] != course:
+            raise ValueError("This course root is already assigned to another course.")
+        write_json(course_record, {"layout": COURSE_LAYOUT, "course": course})
+    run = managed(root, "workspace", lecture, digest(identity)[:24])
     run.mkdir(parents=True, exist_ok=True)
     for folder in (
         "requests",
@@ -113,13 +136,14 @@ def get_run(path):
     run = managed(Path(path).expanduser())
     metadata = read_json(managed(run, "run.json"))
     managed(run, "materials.json")
-    expected = managed(
-        metadata["root"],
-        "workspace",
-        slug(metadata["course"]),
-        slug(metadata["lecture"]),
-        metadata["source_digest"][:24],
-    )
+    layout = metadata.get("layout")
+    if layout not in (None, COURSE_LAYOUT):
+        raise ValueError("Unknown run directory layout.")
+    parts = ["workspace"]
+    if layout is None:
+        parts.append(slug(metadata["course"]))
+    parts.extend([slug(metadata["lecture"]), metadata["source_digest"][:24]])
+    expected = managed(metadata["root"], *parts)
     if expected != run:
         raise ValueError("Run path does not match its identity.")
     return run, metadata
@@ -291,6 +315,8 @@ def sync_files(target, files, receipt, candidates, *, remove=()):
 
 def publish_legacy(args):
     run, metadata = get_run(args.run)
+    if metadata.get("layout") == COURSE_LAYOUT:
+        raise ValueError("New course-root runs require --document, not legacy --note.")
     course, lecture = metadata["course"], metadata["lecture"]
     target = managed(metadata["root"], "output", course)
     base = managed(metadata["root"], "workspace", course, "publication")
@@ -414,7 +440,7 @@ def publish(args):
         for ref in references:
             unit = units[ref]
             citations += (
-                f"[^{ref}]: {label(sources[unit['source']]['name'])} — {label(unit['location'])}\n"
+                f"[^{ref}]: {label(sources[unit['source']]['name'])}-{label(unit['location'])}\n"
             )
         chapter_bodies[section_id] = (chapter_title, chapter_headings(body) + citations)
     all_body = "\n".join([introduction, synthesis, *[body for _, body in chapter_bodies.values()]])
@@ -424,15 +450,18 @@ def publish(args):
     course, lecture = metadata["course"], metadata["lecture"]
     root = Path(metadata["root"])
     target, base = managed(root, "output"), managed(root, "workspace", "publication")
-    prefix = f"{course}/{lecture}/"
+    course_layout = metadata.get("layout") == COURSE_LAYOUT
+    prefix = f"{lecture}/" if course_layout else f"{course}/{lecture}/"
     files = {prefix + name: raw for name, raw in assets.items()}
     links = "\n".join(
         f"- [{label(chapter_title)}](chapters/{section_id}.md)"
         for section_id, (chapter_title, _) in chapter_bodies.items()
     )
+    parent_links = "[课程目录](../index.md)"
+    if not course_layout:
+        parent_links += " · [全部课程](../../index.md)"
     lecture_body = (
-        f"[课程目录](../index.md) · [全部课程](../../index.md)\n\n{introduction}"
-        f"\n\n## 章节导航\n\n{links}\n\n## 本讲小结\n\n{synthesis}"
+        f"{parent_links}\n\n{introduction}\n\n## 章节导航\n\n{links}\n\n## 本讲小结\n\n{synthesis}"
     )
     if uncertainties:
         lecture_body += "\n\n## 不确定事项\n\n" + "\n".join(
@@ -440,17 +469,31 @@ def publish(args):
         )
     locations = list(dict.fromkeys(ref for section in sections for ref in section["source_ids"]))
     lecture_body += "\n\n## 来源\n\n" + "\n".join(
-        f"- {label(sources[units[ref]['source']]['name'])} — {label(units[ref]['location'])}"
+        f"- {label(sources[units[ref]['source']]['name'])}-{label(units[ref]['location'])}"
         for ref in locations
     )
     files[prefix + "index.md"] = markdown_page("lecture-index", metadata, title, lecture_body)
-    for section_id, (chapter_title, body) in chapter_bodies.items():
+    ordered_chapters = list(chapter_bodies.items())
+    for position, (section_id, (chapter_title, body)) in enumerate(ordered_chapters):
         body = IMAGE.sub(lambda match: f"![{match[1]}](../{match[2]})", body)
-        navigation = (
-            "[本讲目录](../index.md) · [课程目录](../../index.md) · [全部课程](../../../index.md)"
-        )
+        navigation = "[本讲目录](../index.md) · [课程目录](../../index.md)"
+        if not course_layout:
+            navigation += " · [全部课程](../../../index.md)"
+        neighbors = []
+        if position > 0:
+            previous_id, (previous_title, _) = ordered_chapters[position - 1]
+            neighbors.append(f"[上一节：{label(previous_title)}]({previous_id}.md)")
+        if position + 1 < len(ordered_chapters):
+            next_id, (next_title, _) = ordered_chapters[position + 1]
+            neighbors.append(f"[下一节：{label(next_title)}]({next_id}.md)")
+        if neighbors:
+            navigation += " · " + " · ".join(neighbors)
         files[prefix + f"chapters/{section_id}.md"] = markdown_page(
-            "course-note", metadata, chapter_title, navigation + "\n\n" + body, section_id
+            "course-note",
+            metadata,
+            chapter_title,
+            navigation + "\n\n" + body + "\n\n" + navigation,
+            section_id,
         )
     with lock(base / ".publish-lock"):
         registry_path = managed(base, "courses.json")
@@ -458,23 +501,39 @@ def publish(args):
         for existing in registry:
             if existing.casefold() == course.casefold() and existing != course:
                 raise ValueError("Course ID has a Windows case collision.")
+        if course_layout and (set(registry) - {course}):
+            raise ValueError("A course-root output cannot contain multiple courses.")
         entry = registry.setdefault(
             course, {"name": metadata["options"].get("course_name", course), "lectures": {}}
         )
+        if course_layout:
+            if entry["lectures"] and entry.get("layout") != COURSE_LAYOUT:
+                raise ValueError(
+                    "Existing library layout preserved; choose a separate course root."
+                )
+            entry["layout"] = COURSE_LAYOUT
         for existing in entry["lectures"]:
             if existing.casefold() == lecture.casefold() and existing != lecture:
                 raise ValueError("Lecture ID has a Windows case collision.")
         entry["lectures"][lecture] = {"title": title, "layout": "sections"}
-        course_body = "[全部课程](../index.md)\n\n" + "\n".join(
+        course_body = "\n".join(
             f"- [{label(item['title'])}]({key}/index.md)" for key, item in entry["lectures"].items()
         )
-        files[course + "/index.md"] = markdown_page(
-            "course-index", {"course": course}, entry["name"], course_body
-        )
-        root_body = "\n".join(
-            f"- [{label(item['name'])}]({key}/index.md)" for key, item in registry.items()
-        )
-        files["index.md"] = markdown_page("library-index", {}, "课程目录", root_body)
+        if course_layout:
+            files["index.md"] = markdown_page(
+                "course-index", {"course": course}, entry["name"], course_body
+            )
+        else:
+            files[course + "/index.md"] = markdown_page(
+                "course-index",
+                {"course": course},
+                entry["name"],
+                "[全部课程](../index.md)\n\n" + course_body,
+            )
+            root_body = "\n".join(
+                f"- [{label(item['name'])}]({key}/index.md)" for key, item in registry.items()
+            )
+            files["index.md"] = markdown_page("library-index", {}, "课程目录", root_body)
         receipt = managed(base, "published.json")
         previous = read_json(receipt).get("files", {}) if receipt.exists() else {}
         remove = {name for name in previous if name.startswith(prefix)} - set(files)
@@ -484,7 +543,9 @@ def publish(args):
             result.update(
                 {
                     "index": str(target / "index.md"),
-                    "course_index": str(target / course / "index.md"),
+                    "course_index": str(
+                        target / "index.md" if course_layout else target / course / "index.md"
+                    ),
                     "lecture_index": str(target / prefix / "index.md"),
                     "chapters": len(sections),
                 }
@@ -514,6 +575,59 @@ def folder_name(value):
 
 
 def export(args):
+    root = managed(Path(args.root).expanduser())
+    course_record = managed(root, "workspace", "course.json")
+    if not course_record.exists():
+        return export_legacy(args)
+    record = read_json(course_record)
+    if record.get("layout") != COURSE_LAYOUT or record["course"] != slug(args.course):
+        raise ValueError("Export course does not match this course root.")
+    source = managed(root, "output")
+    target = managed(Path(args.vault).expanduser(), folder_name(args.course_name))
+    if target == root or target in root.parents or root in target.parents:
+        raise ValueError("Vault course folder must be separate from the working root.")
+    receipt_path = managed(root, "workspace", "publication", "published.json")
+    if not receipt_path.exists():
+        raise ValueError("No published notes to export.")
+    files = {}
+    for relative in read_json(receipt_path)["files"]:
+        if not relative.endswith(".md"):
+            continue
+        note = managed(source, relative)
+        body = note.read_text(encoding="utf-8-sig")
+        if not body.strip() or "本节生成暂未完成" in body:
+            raise ValueError(f"{relative} is incomplete.")
+        files["output/" + relative] = body.encode("utf-8")
+        for _, reference in IMAGE.findall(body):
+            unresolved = (note.parent / reference).resolve()
+            if not unresolved.is_relative_to(source.resolve()):
+                raise ValueError("Exported image must stay inside the course output.")
+            asset_relative = unresolved.relative_to(source.resolve()).as_posix()
+            asset = managed(source, asset_relative)
+            files["output/" + asset_relative] = asset.read_bytes()
+    if "output/index.md" not in files:
+        raise ValueError("Published course index is missing.")
+    base = managed(root, "workspace", "exports", digest(str(target))[:24])
+    with lock(base / ".export-lock"):
+        receipt = managed(base, "published.json")
+        previous = read_json(receipt).get("files", {}) if receipt.exists() else {}
+        result, code = sync_files(
+            target, files, receipt, base / "candidates", remove=set(previous) - set(files)
+        )
+    if not code:
+        for name in ("input", "workspace"):
+            managed(target, name).mkdir(parents=True, exist_ok=True)
+        result.update(
+            {
+                "status": "exported",
+                "index": str(target / "output/index.md"),
+                "course_index": str(target / "output/index.md"),
+            }
+        )
+    return result, code
+
+
+def export_legacy(args):
     root, course = managed(Path(args.root).expanduser()), slug(args.course)
     source = managed(root, "output", course)
     target = managed(Path(args.vault).expanduser(), folder_name(args.course_name))

@@ -33,7 +33,7 @@ python3 tools/install_skill.py
 在 Codex 中调用：
 
 ```text
-使用 $class-skipper 完整读取 input/course.yaml 的每份材料，用子代理生成中文笔记，
+使用 $class-skipper 完整读取 <课程目录>/input/course.yaml 的每份材料，用子代理生成中文笔记，
 输出到当前工作区，按需检查有用的机制图，最后只做一次整体校订。
 ```
 
@@ -44,37 +44,38 @@ python3 tools/install_skill.py
 
 ## Skill 的输入、中间文件和输出结构
 
-使用者把材料放入 `input/`，可按课程、讲次分文件夹。课程清单用于明确讲义与
-转录的对应关系和讲次顺序。skill 默认以当前项目目录为根目录，也支持显式
-指定其他材料路径，无需移动原文件。运行数据和模型任务 JSON 使用
-`schema_version: 1`、UTF-8 编码，统一留在 `workspace/`，保留已有运行记录和完整回答缓存。
+以笔记总根目录作为 Obsidian 仓库，`.obsidian/` 保留在该层。每门课程有独立的
+`input/`、`output/` 和 `workspace/`；助手命令的 `--root` 指向课程目录，而非仓库总根目录。
+课程清单用于明确讲义与转录配对及讲次顺序；显式材料路径仍受支持，无需移动原件。
 
 ```text
-input/os/l02/                 用户提供的讲义和转录
-workspace/os/l02/<run-id>/    materials.json、run.json、status.json、plan.json
-  requests/                  各项任务的完整请求
-  chapters/                  每个板块的完整回答 JSON
-  visuals/pages/、crops/      原页渲染和候选裁图
-  visuals/readings.json      实际读图结果
-  draft/notes.md             交给唯一一次校订的完整初稿
-  revision/review.json       校订结果
-  final/document.json        校订后的结构化笔记
-  cache/                    完整回答及刷新历史
-output/
-  index.md                   全部课程目录
-  os/index.md                课程内的讲次目录
-  os/l02/index.md            讲次内的板块目录、导读和小结
-  os/l02/chapters/section-1.md
-  os/l02/chapters/section-2.md
-  os/l02/assets/diagram.png
+<笔记根目录>/                                      Obsidian 仓库总根目录
+  .obsidian/                                    原有配置
+  computer-organization-and-architecture/        课程目录（--root）
+    input/course.yaml                           可选课程清单
+    input/L02/                                  讲义和转录
+    workspace/L02/<run-id>/                      原始材料、计划、任务请求、章节回答、
+                                                读图、初稿、校订、最终 JSON 和回答缓存
+    workspace/publication/                      发布记录和修改保护
+    output/index.md                             各讲目录
+    output/L02/index.md                          本讲章节目录、导读和小结
+    output/L02/chapters/section-1.md
+    output/L02/chapters/section-2.md
+    output/L02/assets/diagram.png                仅包含被引用的图片
+  operating-systems/                            另一门独立课程
+    input/
+    output/
+    workspace/
 ```
 
-每个主要板块是一篇独立的 Obsidian 笔记，统一包含 YAML 属性、标题、返回目录
-链接、概念讲解、公式、例子、问答与来源定位。`output/` 只包含最终 Markdown、
-目录和被引用的图片，可以直接作为 Obsidian 仓库打开，从 `index.md` 开始阅读。
-导出到现有仓库时，会在指定课程文件夹内保留根目录和课程 ID 子目录，形成
-完整的单课程笔记库，让相对导航链接保持有效。手工修改过的目录、章节和图片
-受到保护，替换候选留在 `workspace/`。
+output/workspace 内不再重复嵌套课程 ID。新讲次目录统一为大写 `LXX`，如 `l2`、`02`
+归一化为 `L02`。每节笔记包含 YAML 属性、简短编号标题、顶部和底部的上一节／下一节
+导航、返回目录链接、知识讲解、例子、问答及来源脚注。
+从各课程的 `output/index.md` 开始阅读，不把 output 单独打开成 Obsidian 仓库。
+从独立工作区导出时，同样采用 `<仓库>/<课程目录>/output/LXX/`，必要时创建空的
+input/workspace 兄弟目录，不复制原始材料或缓存，也不修改 `.obsidian/`。
+直接在仓库内的课程目录生成笔记时无需另行导出。旧运行记录、缓存和手写笔记保持原路径，
+不自动迁移。发布与导出继续保护手工修改，将冲突候选留在 workspace。
 
 ## 开发与验证
 

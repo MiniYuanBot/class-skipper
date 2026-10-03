@@ -31,8 +31,13 @@ Essential unread material prevents a lecture from being represented as complete.
 
 ## Notes and figures
 
-`output/index.md` links to courses, course indexes link to lectures, and lecture
-indexes link to independent chapter notes. Notes carry Obsidian properties,
+The notebook root holds `.obsidian/` and sibling course folders. Each course
+folder is a helper root containing input/output/workspace. Its `output/index.md`
+links directly to `LXX/index.md`, which links to independent `LXX/chapters/` notes.
+New runs live under workspace/LXX/run-id with a course-root layout marker; old
+runs retain their original paths and compatibility behavior. Optional export
+keeps output/LXX beneath the destination course folder and does not touch vault
+configuration. Notes carry Obsidian properties,
 relative navigation, source-location footnotes, concept explanations, meaningful
 examples and Q&A. Chapter headings are promoted outside code/math when splitting
 the assembled lecture. The active file and formatting contract is in

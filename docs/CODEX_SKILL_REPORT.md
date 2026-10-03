@@ -9,13 +9,14 @@ The repository contains only the Codex skill and local helpers. The installer co
 skill files and preserves differing installed content. Users place sources in
 `input/`; run data, requests, chapter responses, visual records, drafts, revision
 responses and caches stay in `workspace/`. Structured publication creates an
-Obsidian library under `output/`, with root/course/lecture `index.md` navigation,
+Obsidian course notes under `<vault>/<course>/output/`, with course/lecture
+`index.md` navigation (older runs retain the earlier library layout),
 one Markdown note per chapter, properties, parent links, source footnotes and only
 referenced images. Intermediate JSON is never copied into the published library.
 
 ## Local validation on Windows
 
-Fourteen tests passed: twelve helper tests and two installer tests. They use real small
+At the original implementation checkpoint, fourteen tests passed: twelve helper tests and two installer tests. They use real small
 UTF-8 TXT, PDF, DOCX and PPTX fixtures, including tables, speaker notes and ending
 conditions. Checks cover PDF rendering/cropping, source changes, cache invalidation
 and refresh history, portable names, standalone installation, and manual note,
@@ -30,6 +31,15 @@ The skill-creator frontmatter validator passed. Ruff lint/format and compilation
 passed for the added Python files. The installed skill also parsed a TXT fixture
 from outside its source folder. Binary parser tests ran with the bundled local
 Python runtime; no external model API was called.
+
+## Course-root layout regression checks
+
+The current nineteen offline tests additionally cover uppercase LXX normalization,
+course-local output/workspace paths, separate course roots under a shared vault,
+unchanged `.obsidian` settings, previous/next chapter links in final reading order,
+export into a course/output hierarchy, and old-run publication/export compatibility.
+New preparation does not mix a course-root layout into an existing legacy library.
+These are local helper/fixture checks, not a new model or full-course generation run.
 
 ## Real Codex forward exercise
 

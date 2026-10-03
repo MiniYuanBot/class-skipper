@@ -36,7 +36,7 @@ repository after copying. Local skill discovery is described in the
 In Codex, invoke:
 
 ```text
-Use $class-skipper to read every file in input/course.yaml, generate Chinese notes
+Use $class-skipper to read every file in <course-folder>/input/course.yaml, generate Chinese notes
 in this workspace with subagents, inspect useful diagrams, and revise once.
 ```
 
@@ -49,41 +49,44 @@ commands and artifact contracts.
 
 ## Skill input, intermediate and output layout
 
-Put lecture files in `input/`, optionally grouped by course and lecture. A manifest
-makes slide/transcript pairing and lecture order explicit. The default skill root
-is the current project directory. Explicit paths remain supported without moving
-original sources. Run data and reasoning JSON artifacts are versioned
-(`schema_version: 1`), UTF-8 and stored under `workspace/`; new runs preserve earlier
-artifacts and caches.
+Open the notebook root as the Obsidian vault. Its `.obsidian/` stays there; each
+course has its own `input/`, `output/` and `workspace/`. Helper `--root` selects the
+course folder, not the vault root. Explicit source paths remain supported without
+moving originals. A course manifest defines lecture pairing and reading order.
 
 ```text
-input/os/l02/                 User slides and transcripts
-workspace/os/l02/<run-id>/    materials.json, run.json, status.json, plan.json
-  requests/                  Exact reasoning requests
-  chapters/                  Completed chapter response JSON
-  visuals/pages/, crops/     Rendered pages and selected crops
-  visuals/readings.json      Actual visual inspection results
-  draft/notes.md             Complete draft for the single editorial pass
-  revision/review.json       Editorial response
-  final/document.json        Corrected structured lecture
-  cache/                    Completed responses and refresh history
-output/
-  index.md                   Library/course directory
-  os/index.md                Course/lecture directory
-  os/l02/index.md            Lecture/chapter directory and synthesis
-  os/l02/chapters/section-1.md
-  os/l02/chapters/section-2.md
-  os/l02/assets/diagram.png
+<notebook-root>/                                      Obsidian vault root
+  .obsidian/                                    Existing configuration
+  computer-organization-and-architecture/        Course root (--root)
+    input/course.yaml                           Optional course manifest
+    input/L02/                                  Slides and transcripts
+    workspace/L02/<run-id>/                      Materials, plans, requests,
+                                                chapters, visuals, draft, revision,
+                                                final document and response cache
+    workspace/publication/                      Protected publication receipts
+    output/index.md                             Ordered lecture directory
+    output/L02/index.md                          Chapter directory and synthesis
+    output/L02/chapters/section-1.md
+    output/L02/chapters/section-2.md
+    output/L02/assets/diagram.png                Referenced images only
+  operating-systems/                            Another independent course
+    input/
+    output/
+    workspace/
 ```
 
-Each major planned chapter becomes a separate Obsidian note with YAML properties,
-a title, parent-index link, concept explanations, formulas, examples, Q&A and
-source-location footnotes. Only final Markdown, navigation and referenced assets
-are published. Open `output/` as an Obsidian vault and start at `index.md`.
-Optional structured export places a self-contained single-course library under
-the requested vault course folder, including its root index and course-ID folder,
-so relative navigation remains valid. Publication protects edited indexes, chapter
-notes and images; conflicting replacements stay in `workspace/`.
+There is no repeated course-ID folder inside output/workspace. New lecture IDs
+normalize to uppercase `LXX` (`l2` or `02` becomes `L02`). Chapter notes have YAML
+properties, concise numbered titles, top/bottom previous/next links, directory
+links, knowledge explanations, examples, Q&A and source footnotes.
+Only final Markdown and referenced assets enter output. Start at the course's
+`output/index.md`; do not open output as a separate vault. Optional export from a
+separate workspace uses the same `<vault>/<course-folder>/output/LXX/` hierarchy,
+creating empty input/workspace siblings when absent without copying private data
+or changing `.obsidian/`. Publishing directly within the vault needs no export.
+Old runs/caches and manual notes remain at their existing paths; no automatic
+migration occurs. Publication/export preserves manual edits and saves conflicting
+candidates under workspace.
 
 ## Development and evidence
 
