@@ -7,6 +7,15 @@ import re
 import tempfile
 from pathlib import Path
 
+RESERVED = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *{f"COM{i}" for i in range(1, 10)},
+    *{f"LPT{i}" for i in range(1, 10)},
+}
+
 
 def digest(value):
     if not isinstance(value, bytes):
@@ -41,14 +50,7 @@ def read_json(path):
 def slug(value):
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}", value):
         raise ValueError("Course and lecture IDs must use letters, digits, underscores or hyphens.")
-    if value.upper() in {
-        "CON",
-        "PRN",
-        "AUX",
-        "NUL",
-        *{f"COM{i}" for i in range(1, 10)},
-        *{f"LPT{i}" for i in range(1, 10)},
-    }:
+    if value.upper() in RESERVED:
         raise ValueError("ID is a reserved Windows filename.")
     return value
 

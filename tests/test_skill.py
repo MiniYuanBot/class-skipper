@@ -33,6 +33,10 @@ def small_pdf(path):
     path.write_bytes(data)
 
 
+def note_name(section):
+    return section["title"].split()[0] + "-" + section.get("slug", section["id"]) + ".md"
+
+
 class OfflineSkillTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -135,6 +139,8 @@ class OfflineSkillTests(unittest.TestCase):
 
         for page in root.rglob("*.md"):
             for reference in re.findall(r"\]\(([^()]+)\)", page.read_text(encoding="utf-8")):
+                if reference.startswith("https://"):
+                    continue
                 self.assertTrue(
                     (page.parent / reference).is_file(), f"Broken link in {page}: {reference}"
                 )
@@ -169,7 +175,7 @@ class OfflineSkillTests(unittest.TestCase):
         body = chapter.read_text(encoding="utf-8")
         self.assertIn('type: "course-note"', body)
         self.assertIn('section: "concept"', body)
-        self.assertIn("lecture.txt-Text segment 1", body)
+        self.assertIn("> [!info]- 来源\n> - lecture.txt：Text segment 1", body)
         self.assertIn("../assets/figure.png", body)
         self.assertIn("\n## 定义\n", body)
         self.assertIn("\n### 细节\n", body)
@@ -336,16 +342,16 @@ class OfflineSkillTests(unittest.TestCase):
         output = self.root / "output"
         self.assert_local_links(output)
         for position, section in enumerate(sections):
-            body = (output / "L01/chapters" / (section["id"] + ".md")).read_text(encoding="utf-8")
+            body = (output / "L01/chapters" / note_name(section)).read_text(encoding="utf-8")
             self.assertEqual(body.count("上一节："), 2 if position > 0 else 0)
             self.assertEqual(body.count("下一节："), 2 if position < len(sections) - 1 else 0)
             for neighbor, label in ((position - 1, "上一节"), (position + 1, "下一节")):
                 if 0 <= neighbor < len(sections):
                     target = sections[neighbor]
-                    link = f"[{label}：{target['title']}]({target['id']}.md)"
+                    link = f"[{label}：{target['title']}]({note_name(target)})"
                     self.assertEqual(body.count(link), 2)
                     self.assertLess(body.index(link), body.index("## 定义"))
-                    self.assertGreater(body.rindex(link), body.index("[^s1b1]:"))
+                    self.assertGreater(body.rindex(link), body.index("> [!info]- 来源"))
         exported = self.cli(
             "export",
             "--root",
@@ -360,7 +366,7 @@ class OfflineSkillTests(unittest.TestCase):
         target = Path(exported["target"])
         self.assert_local_links(target)
         for section in sections:
-            relative = Path("L01/chapters") / (section["id"] + ".md")
+            relative = Path("L01/chapters") / note_name(section)
             self.assertEqual(
                 (target / "output" / relative).read_bytes(), (output / relative).read_bytes()
             )
@@ -380,10 +386,76 @@ class OfflineSkillTests(unittest.TestCase):
         self.cli("publish", "--run", prepared["run"], "--document", document)
         output = self.root / "output"
         self.assert_local_links(output)
-        body = (output / "L01/chapters/only.md").read_text(encoding="utf-8")
+        body = (output / "L01/chapters/01-only.md").read_text(encoding="utf-8")
         self.assertNotIn("上一节：", body)
         self.assertNotIn("下一节：", body)
         self.assertEqual(body.count("[本讲目录](../index.md)"), 2)
+
+    def test_inline_footnotes_merged_sources_and_remote_images(self):
+        prepared = self.prepare("--transcript", self.text)
+        document = self.document(
+            [
+                {
+                    "id": "section-1",
+                    "title": "01 流水线: 吞吐/延迟",
+                    "slug": "pipeline-throughput",
+                    "summary": "区分两种指标",
+                    "markdown": (
+                        "### 定义\n\n吞吐率提升。[^s1b2]\n\n"
+                        "![五级流水](https://upload.wikimedia.org/pipeline.svg)"
+                    ),
+                    "source_ids": ["s1b1", "s1b2", "s2b2"],
+                }
+            ]
+        )
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        output = self.root / "output"
+        self.assert_local_links(output)
+        body = (output / "L01/chapters/01-pipeline-throughput.md").read_text(encoding="utf-8")
+        self.assertIn("lecture.txt：Text segment 1–2", body)
+        self.assertIn("lecture.txt：Text segment 2", body)
+        self.assertIn("[^s1b2]: lecture.txt-Text segment 2", body)
+        self.assertNotIn("[^s1b1]", body)
+        self.assertIn("](https://upload.wikimedia.org/pipeline.svg)", body)
+        self.assertIn('aliases: ["01 流水线: 吞吐/延迟"]', body)
+        index = (output / "L01/index.md").read_text(encoding="utf-8")
+        self.assertIn("(chapters/01-pipeline-throughput.md)：区分两种指标", index)
+        broken = json.loads(document.read_text(encoding="utf-8"))
+        broken["sections"][0]["slug"] = "流水线"
+        document.write_text(json.dumps(broken, ensure_ascii=False), encoding="utf-8")
+        self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+        broken["sections"][0]["slug"] = "pipeline-throughput"
+        broken["sections"][0]["markdown"] += "\n\n误引。[^nope]"
+        document.write_text(json.dumps(broken, ensure_ascii=False), encoding="utf-8")
+        self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+
+    def test_format_check_reports_mechanical_issues_and_doctor_runs(self):
+        prepared = self.prepare()
+        good = {
+            "id": "section-1",
+            "title": "01 流水线",
+            "slug": "pipelining",
+            "summary": "重叠执行",
+            "markdown": (
+                "### 定义\n\n**补充解释**：正文。[^s1b1]\n\n$$\nx\n$$\n\n"
+                "```text\n# literal\n```\n\n> [!question]- 自测：问题？\n> 答案。"
+            ),
+            "source_ids": ["s1b1"],
+        }
+        bad = {
+            "id": "section-2",
+            "title": "冒险",
+            "markdown": "## 越级\n\n**补充解释：**正文 [^zz]\n\n$$\nx",
+            "source_ids": ["s1b2"],
+        }
+        document = self.write_json(
+            "check.json", {"schema_version": 1, "title": "L01 流水线", "sections": [good, bad]}
+        )
+        result = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(result["status"], "issues")
+        self.assertEqual({issue["section"] for issue in result["issues"]}, {"section-2"})
+        self.assertEqual(len(result["issues"]), 8)
+        self.assertIn(self.cli("doctor")["status"], {"ready", "setup_needed"})
 
     def test_complete_utf8_materials_identity_and_no_repository_dependency(self):
         first = self.prepare()
@@ -669,6 +741,41 @@ class OfflineSkillTests(unittest.TestCase):
         )
         with Image.open(output) as image:
             self.assertEqual(image.size, (50, 60))
+        self.cli(
+            "render",
+            "--run",
+            result["run"],
+            "--source",
+            "s2",
+            "--page",
+            "1",
+            "--scale",
+            "1",
+            "--crop",
+            "0.5,0,0.5,0.25",
+            "--output",
+            output,
+        )
+        with Image.open(output) as image:
+            self.assertEqual(image.size, (100, 50))
+        sheets = self.cli(
+            "sheet", "--run", result["run"], "--source", "s2", "--output-dir", self.base / "sheets"
+        )["sheets"]
+        self.assertEqual(sheets[0]["pages"], [1])
+        with Image.open(sheets[0]["path"]) as image:
+            self.assertGreater(image.width, 360)
+        self.cli(
+            "sheet",
+            "--run",
+            result["run"],
+            "--source",
+            "s2",
+            "--pages",
+            "1-3",
+            "--output-dir",
+            self.base / "sheets",
+            expected=2,
+        )
         previous = output.read_bytes()
         self.cli(
             "render",

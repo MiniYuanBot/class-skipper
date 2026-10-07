@@ -30,6 +30,16 @@ class InstallSkillTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "preserved"):
             installer.install(source, destination)
         self.assertEqual((destination / "SKILL.md").read_text(encoding="utf-8"), "manual edit")
+        installer.install(source, destination, update=True)
+        self.assertEqual((destination / "SKILL.md").read_text(encoding="utf-8"), "skill")
+        backup = destination.with_name("class-skipper.backup")
+        self.assertEqual((backup / "SKILL.md").read_text(encoding="utf-8"), "manual edit")
+
+    def test_targets_cover_codex_and_claude_code(self):
+        names = [path.parent.parent.name for path in installer.targets("all")]
+        self.assertEqual(len(names), 2)
+        self.assertTrue(all(path.name == "class-skipper" for path in installer.targets("all")))
+        self.assertEqual(installer.targets("claude")[0].parent.name, "skills")
 
     def test_installer_rejects_nested_destination(self):
         (self.root / "SKILL.md").write_text("skill", encoding="utf-8")

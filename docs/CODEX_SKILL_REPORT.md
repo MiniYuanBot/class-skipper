@@ -63,3 +63,31 @@ argument order. Evidence and the note remain under the ignored
 This is a small Codex fixture run. No macOS execution, original full-course run, or human
 acceptance was performed. Cross-platform support is implemented with pathlib,
 UTF-8, atomic files and directory locks rather than a Unix launcher or `fcntl`.
+
+## Note-quality and multi-host update (2026-10-07)
+
+The skill was reworked after reviewing generated computer-organization notes
+(L01–L03 in a separate notebook). Those notes were accurate and well cited but
+dense, used only one figure per lecture, attached every assigned unit as a
+footnote, had no summary or hidden-answer self-tests, and used `section-N.md`
+file names. Changes:
+
+- `references/note-style.md`: a fixed chapter template (key-point callout,
+  motivation → definition → mechanism → example → pitfalls, Mermaid, labeled
+  supplement callouts, collapsed self-tests) and a worked exemplar.
+- `references/visuals.md` and the `sheet` command: labeled contact sheets to
+  screen every slide during full reading, figure candidates in the plan, writer
+  placeholders, fractional crops at a chosen scale, and verified external links.
+- Publisher: English chapter file names (`NN-<english-slug>.md`) with the
+  Chinese title as an Obsidian alias, chapter
+  summaries in the lecture index, footnote definitions only for markers used,
+  a collapsed source list with merged page ranges, remote `https://` images.
+- `doctor` (interpreter/dependency report) and `check` (mechanical format list
+  fixed in the single revision; not a gate).
+- SKILL.md is host-neutral with a Codex/Claude Code tool mapping; the installer
+  targets both hosts and supports `--update` with a backup.
+
+Evidence: 23 offline tests (helpers and installer) pass with real small parser
+fixtures and labeled response doubles, and ruff lint/format pass, on Windows
+with Python 3.14. No real Codex or Claude Code course run, no macOS execution
+and no human acceptance of the new note format have been performed yet.

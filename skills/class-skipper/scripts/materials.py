@@ -159,25 +159,43 @@ def read_materials(slides, transcripts):
     return {"sources": sources, "units": units, "warnings": warnings}
 
 
-def render_page(source, page_number, destination):
+def page_count(source):
     import pypdfium2 as pdfium
 
     if Path(source["path"]).suffix.lower() != ".pdf":
         raise ValueError("Page rendering currently requires a PDF source.")
     document = pdfium.PdfDocument(source["path"])
     try:
-        if not 1 <= page_number <= len(document):
-            raise ValueError("PDF page number is outside the document.")
-        page = document[page_number - 1]
-        try:
-            bitmap = page.render(scale=1.5)
-            try:
-                image = bitmap.to_pil()
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                image.save(destination, format="PNG")
-            finally:
-                bitmap.close()
-        finally:
-            page.close()
+        return len(document)
     finally:
         document.close()
+
+
+def page_images(source, numbers, scale=1.5):
+    """Yield (page number, PIL image), opening the PDF once for many pages."""
+    import pypdfium2 as pdfium
+
+    if Path(source["path"]).suffix.lower() != ".pdf":
+        raise ValueError("Page rendering currently requires a PDF source.")
+    document = pdfium.PdfDocument(source["path"])
+    try:
+        for number in numbers:
+            if not 1 <= number <= len(document):
+                raise ValueError("PDF page number is outside the document.")
+            page = document[number - 1]
+            try:
+                bitmap = page.render(scale=scale)
+                try:
+                    yield number, bitmap.to_pil().convert("RGB")
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+    finally:
+        document.close()
+
+
+def render_page(source, page_number, destination, scale=1.5):
+    for _, image in page_images(source, [page_number], scale):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        image.save(destination, format="PNG")

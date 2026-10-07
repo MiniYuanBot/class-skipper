@@ -1,8 +1,8 @@
-# Design: a Codex-native lecture workflow
+# Design: a host-native lecture workflow
 
 The repository packages one self-contained skill in `skills/class-skipper`.
-The current Codex session coordinates full-material reading and planning, chapter
-writing, optional selective visual reading, and one editorial revision. Native
+The current agent session (Codex or Claude Code) coordinates full-material
+reading and planning, chapter writing, visual selection, and one editorial revision. Native
 subagents handle independent chapters, visual candidates and the single editorial
 pass when available. Without delegation tools the same workflow runs sequentially.
 
@@ -12,8 +12,10 @@ pass when available. Without delegation tools the same workflow runs sequentiall
 including tables, speaker notes and final source segments. It preserves source
 hashes, roles, unit IDs and page/body locations. `scripts/storage.py` provides
 portable identifiers, managed paths, atomic writes and JSON helpers.
-`scripts/local.py` prepares runs, caches completed Codex responses, renders and
-crops PDF pages, publishes final notes, and exports a library into Obsidian.
+`scripts/local.py` prepares runs, reports the Python environment (`doctor`),
+caches completed agent responses, renders and crops PDF pages, renders labeled
+contact sheets (`sheet`), lists mechanical format issues (`check`), publishes
+final notes, and exports a library into Obsidian.
 These helpers perform local operations; they do not provide model inference.
 
 ## Artifact boundaries
@@ -43,8 +45,12 @@ examples and Q&A. Chapter headings are promoted outside code/math when splitting
 the assembled lecture. The active file and formatting contract is in
 [workflow.md](../skills/class-skipper/references/workflow.md).
 
-Codex inspects selected PDF pages and actual crops before placing useful mechanism
-figures beside their explanations. Only referenced figures enter the output.
+Chapters follow the template in `references/note-style.md`. During full reading
+the agent views contact sheets of every PDF page, records figure candidates in
+the plan, and writers leave placeholders where those figures belong. The agent
+views each actual crop before replacing a placeholder; writers may add Mermaid
+diagrams for processes stated in the source, and verified external visual links
+go beside the matching concept. Only referenced local figures enter the output.
 Receipts compare expected file hashes before publication/export; edited files are
 preserved and complete replacements remain in workspace candidates. Structured
 export retains the complete navigation hierarchy. Earlier single-file notes can
@@ -53,7 +59,9 @@ still be published/exported locally through the helper's compatibility option.
 ## Portability and validation
 
 Python 3.11+, pathlib, UTF-8, atomic writes and directory locks support Windows and
-macOS without a Unix launcher or Unix-only lock module. Tests use labeled response
+macOS without a Unix launcher or Unix-only lock module. Chapter file names are
+English ASCII slugs, so they are portable and easy to type on both systems. SKILL.md maps each
+step to Codex and Claude Code tools, and the installer targets both hosts. Tests use labeled response
 doubles and real small parser fixtures. Actual Codex exercises are recorded
 separately in [CODEX_SKILL_REPORT.md](CODEX_SKILL_REPORT.md); macOS execution and
 human acceptance have not been established.

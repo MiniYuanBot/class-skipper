@@ -2,21 +2,31 @@
 
 [English](README.md)
 
-## Codex skill（Windows 和 macOS）
+一个可移植的 agent skill：把课程讲义（PDF/PPTX）和可选讲稿（DOCX/TXT/MD，中英文均可）
+整理成中文 Obsidian 学习笔记。支持 **Codex** 和 **Claude Code**，可在 **Windows** 与
+**macOS** 上使用。
 
-可独立安装的 [class-skipper skill](skills/class-skipper/SKILL.md) 使用当前
-Codex 会话完成四步：完整阅读与规划、逐章写作、可选的选择性读图、一次整体
-校订。独立章节、候选图和最后一次校订优先交给可用的 Codex 子代理；本地
-Python 助手负责解析、保存完整回答缓存和保护手工修改。这个模式不需要提供商
-API key，不读取 `.env`，不调用模型 HTTP 客户端。
-仍需正常登录 Codex，并消耗其使用额度。没有子代理工具时按同一流程顺序完成；
-读图需要当前宿主支持查看图片。
+skill 在当前 agent 会话中分四步完成，可用时把独立任务交给原生子代理：
 
-在项目目录使用 Python 3.11+ 安装：
+1. **完整阅读与规划**：读取全部文本单元，并查看带页码的讲义缩略图拼版，补上文字提取
+   漏掉的图示和扫描页；规划 4–8 章，标注候选图和每个概念的主讲章节。
+2. **逐章写作**：按固定模板写作，包括本节要点、动机 → 定义 → 机制 → 例题 → 易错点，
+   用 Mermaid 画材料中描述的流程，用带标签的提示块区分补充内容，自测题答案默认折叠。
+3. **加入可视化**：裁剪讲义原图并查看裁剪结果确认；有联网能力时，附上经过核实的
+   外部可视化或交互演示链接。
+4. **一次整体校订**：由一位编辑修正覆盖面、准确性、重复和格式；`check` 命令列出
+   Markdown 机械问题，在同一次校订中改完。
+
+本地 Python 脚本只负责解析文档、渲染页面、缓存回答和发布文件。不需要 API key、
+`.env`、模型 SDK 或外部 OCR；按宿主的正常登录状态和额度运行。
+
+## 安装
+
+需要 Python 3.11+。在本项目目录执行：
 
 ```powershell
-# Windows PowerShell
-python tools/install_skill.py
+# Windows（PowerShell）
+py -3 tools/install_skill.py
 ```
 
 ```bash
@@ -24,75 +34,74 @@ python tools/install_skill.py
 python3 tools/install_skill.py
 ```
 
-如果设置了 `CODEX_HOME`，安装到 `CODEX_HOME/skills/class-skipper`；否则安装到
-`~/.agents/skills/class-skipper`。其他宿主的 skill 目录可用 `--destination` 指定
-完整目标文件夹。已有安装内容不一致时会保留原文件，不直接覆盖。也可将整个
-`skills/class-skipper` 文件夹复制到 skill 目录，复制后无需保留本项目源码。
-本地发现规则见 [官方 skill 文档](https://learn.chatgpt.com/docs/build-skills)。
+默认同时安装到两个宿主：
 
-在 Codex 中调用：
+| 宿主 | 默认位置 |
+| --- | --- |
+| Codex | `$CODEX_HOME/skills/class-skipper`，否则 `~/.agents/skills/class-skipper` |
+| Claude Code | `$CLAUDE_CONFIG_DIR/skills/class-skipper`，否则 `~/.claude/skills/class-skipper` |
 
-```text
-使用 $class-skipper 完整读取 <课程目录>/input/course.yaml 的每份材料，用子代理生成中文笔记，
-输出到当前工作区，按需检查有用的机制图，最后只做一次整体校订。
-```
+用 `--host codex` 或 `--host claude` 只装一个，用 `--destination` 指定精确目录
+（例如某个项目的 `.claude/skills/class-skipper`）。已安装内容不同时默认保留不动；
+加 `--update` 会先把旧版本改名为 `class-skipper.backup*` 再安装。也可以手动复制整个文件夹。
 
-提供实际材料路径或课程清单，也可指定已授权的 Obsidian 仓库。缺少本地解析
-依赖时按需安装：TXT/Markdown 只用 Python 标准库，PDF/DOCX/PPTX 分别需要
-`pypdfium2`、`python-docx`、`python-pptx`。离线命令与中间文件约定见
-[workflow.md](skills/class-skipper/references/workflow.md)。
+## 使用
 
-笔记优先给出知识结论及必要条件，用简单语言表达，并保留有用的推导和例子。
-写作者与编辑共用同一写作提示：减少围绕证据和误读的防御性说明、重复讲解及
-无关补充，让问答检验实际推理，并在原有一次校订中检查 Markdown 加粗标签边界。
-
-## Skill 的输入、中间文件和输出结构
-
-以笔记总根目录作为 Obsidian 仓库，`.obsidian/` 保留在该层。每门课程有独立的
-`input/`、`output/` 和 `workspace/`；助手命令的 `--root` 指向课程目录，而非仓库总根目录。
-课程清单用于明确讲义与转录配对及讲次顺序；显式材料路径仍受支持，无需移动原件。
+在笔记根目录（Obsidian 仓库）或某门课程目录中启动 agent：
 
 ```text
-<笔记根目录>/                                      Obsidian 仓库总根目录
-  .obsidian/                                    原有配置
-  computer-organization-and-architecture/        课程目录（--root）
-    input/course.yaml                           可选课程清单
-    input/L02/                                  讲义和转录
-    workspace/L02/<run-id>/                      原始材料、计划、任务请求、章节回答、
-                                                读图、初稿、校订、最终 JSON 和回答缓存
-    workspace/publication/                      发布记录和修改保护
-    output/index.md                             各讲目录
-    output/L02/index.md                          本讲章节目录、导读和小结
-    output/L02/chapters/section-1.md
-    output/L02/chapters/section-2.md
-    output/L02/assets/diagram.png                仅包含被引用的图片
-  operating-systems/                            另一门独立课程
-    input/
-    output/
-    workspace/
+# Codex
+使用 $class-skipper 为 computer-organization-and-architecture/input 中的每一讲生成笔记。
+
+# Claude Code
+/class-skipper 为 computer-organization-and-architecture/input 中的每一讲生成笔记
 ```
 
-output/workspace 内不再重复嵌套课程 ID。新讲次目录统一为大写 `LXX`，如 `l2`、`02`
-归一化为 `L02`。每节笔记包含 YAML 属性、简短编号标题、顶部和底部的上一节／下一节
-导航、返回目录链接、知识讲解、例子、问答及来源脚注。
-从各课程的 `output/index.md` 开始阅读，不把 output 单独打开成 Obsidian 仓库。
-从独立工作区导出时，同样采用 `<仓库>/<课程目录>/output/LXX/`，必要时创建空的
-input/workspace 兄弟目录，不复制原始材料或缓存，也不修改 `.obsidian/`。
-直接在仓库内的课程目录生成笔记时无需另行导出。旧运行记录、缓存和手写笔记保持原路径，
-不自动迁移。发布与导出继续保护手工修改，将冲突候选留在 workspace。
+在 Claude Code 中直接说“帮我把这几讲做成笔记”也会自动加载该 skill。skill 先运行
+`scripts/local.py doctor` 检查 Python，只把缺少的解析包（`pypdfium2`、`Pillow`、
+`python-docx`、`python-pptx`）安装到 `<课程>/workspace/.venv`。
 
-## 开发与验证
+## 目录结构
 
-测试使用 Python 标准库 unittest。在项目目录安装本地解析及检查依赖后运行；
-macOS 将 `python` 换成 `python3`：
+笔记根目录保留 `.obsidian/`；每门课程有独立的 `input/`、`workspace/`、`output/`，
+脚本的 `--root` 指向课程目录。
 
 ```text
-python -m pip install pypdfium2 python-docx python-pptx Pillow ruff PyYAML
-python -m unittest discover -s tests -v
-python -m ruff check skills tools tests
-python -m ruff format --check skills tools tests
+<笔记根目录>/                             Obsidian 仓库根目录
+  .obsidian/                             不做修改
+  computer-organization-and-architecture/   课程目录（--root）
+    input/course.yaml                    可选清单（讲义与讲稿配对、讲次顺序）
+    input/L02.pdf, input/L02.docx        讲义和讲稿
+    workspace/L02/<run-id>/              材料、计划、任务请求、章节、缩略图/裁剪、
+                                         初稿、校订、缓存
+    output/index.md                      课程目录
+    output/L02/index.md                  章节链接（附一句话摘要）与本讲小结
+    output/L02/chapters/01-performance-metrics.md  每章一篇（英文文件名）
+    output/L02/assets/l02-isa-formats.png 仅包含被引用的图片
 ```
 
-本地文件测试覆盖解析、缓存、发布和导出保护，不调用模型。真实 Codex 试跑
-证据及平台验证范围见 [CODEX_SKILL_REPORT.md](docs/CODEX_SKILL_REPORT.md)，
-当前架构见 [DESIGN.md](docs/DESIGN.md)。
+文件和文件夹名均为英文，笔记内容为中文。每篇章节笔记包含：YAML 属性
+（以中文标题作为 alias，可用 `[[双链]]` 引用）、顶部和底部的
+上一节/下一节及目录导航、本节要点、带公式/例题/原图/Mermaid 的概念小节、折叠的自测题、
+关键结论上的脚注，以及合并页码区间后折叠显示的来源列表。发布时保护手工修改：
+冲突文件保持原样，新版本作为候选保存在 workspace。旧运行记录保持原路径和
+`section-N.md` 文件名。
+
+详见 [SKILL.md](skills/class-skipper/SKILL.md)、
+[流程约定](skills/class-skipper/references/workflow.md)、
+[笔记风格](skills/class-skipper/references/note-style.md) 和
+[可视化指南](skills/class-skipper/references/visuals.md)。
+
+## 开发
+
+```text
+python -m venv .venv
+.venv/bin/python -m pip install pypdfium2 python-docx python-pptx Pillow ruff   # Windows：.venv\Scripts\python
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m ruff check skills tools tests
+.venv/bin/python -m ruff format --check skills tools tests
+```
+
+测试使用真实的小型 PDF/DOCX/PPTX/TXT 样例和明确标注的回答替身，不调用模型。
+真实运行记录单独见 [CODEX_SKILL_REPORT.md](docs/CODEX_SKILL_REPORT.md)，
+架构说明见 [DESIGN.md](docs/DESIGN.md)。
