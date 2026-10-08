@@ -136,7 +136,9 @@ Plan response (`plan.json`):
 `slug` is the English file-name stem for the chapter: lowercase ASCII words
 joined by hyphens, at most ten words, translating the Chinese title (for example
 `01 进程模型` → `process-model`). `owns` lists the concepts whose main explanation
-lives in that section, so other writers link instead of repeating them.
+lives in that section, so other writers link instead of repeating them. In all
+authored text, use `[中文说明](section:section-id)` with the target's stable plan
+ID; the publisher supplies the final relative Markdown path.
 
 Chapter response (`chapters/section-1.json`):
 
@@ -200,10 +202,13 @@ format check once and fix every reported item directly in `final/document.json`:
 <python> <skill>/scripts/local.py check --run "<run>" --document "<run>/final/document.json"
 ```
 
-`check` reports mechanical problems only (title formats, missing summaries or slugs,
-heading levels, bold-label boundaries, unbalanced `$$` or code fences, unknown
-footnote IDs, missing self-tests). It is not a score or acceptance gate; fix the
-items in the same revision and do not loop.
+`check` reports mechanical problems only: title formats, missing summaries or
+slugs, heading levels, bold-label boundaries, math/code delimiters, unknown
+footnote IDs, missing self-tests, unresolved or ambiguous chapter references,
+image syntax, Unicode math substitutes and math in image alt text. It includes
+prose, summaries and lecture introduction/synthesis where applicable. Symbol
+choice and formula meaning remain the writer's and single editor's work. Fix
+reported items in the same revision; this is not a score or extra review stage.
 
 ## Publish and optional export
 
@@ -214,10 +219,23 @@ items in the same revision and do not loop.
 
 Repeat `--asset` for each referenced local image; reference it in section bodies as
 `assets/<filename>` (the publisher rewrites it to `../assets/<filename>`). Remote
-`https://` images and links are left unchanged. Return chapter bodies without
+`https://` images and links are left unchanged. Use inline `![alt](path)` images;
+reference-style images, `![[embeds]]` and images wrapped in links are reported for
+conversion to this form, never silently omitted. Return chapter bodies without
 footnote definitions or source lines: the publisher defines every `[^unit-id]`
 marker actually used and appends a collapsed source list built from `source_ids`.
 An unknown marker fails publication.
+
+The publisher assigns all final chapter filenames before rewriting internal
+references. `[进程模型](section:section-1)` becomes a relative Markdown link to
+that chapter: `01-process-model.md` from a chapter, or
+`chapters/01-process-model.md` from the lecture index. Existing Wikilinks and
+Markdown links using a full chapter title are converted only when that title
+matches uniquely. Display text and heading/block fragments are preserved;
+code, formulas and external URLs are not rewritten. Unknown or ambiguous
+chapter references and invalid image references fail before output is written.
+This checks reference integrity during publication, without an additional review
+pass. CLI arguments and JSON schemas remain unchanged.
 
 Hash receipts preserve manual changes in notes, assets and indexes; conflicting
 output is written to a candidate folder in workspace and the command exits 5.
@@ -235,7 +253,7 @@ single-file publications only; new runs use `--document`.
 ## Published Markdown contract
 
 All notes and indexes begin with YAML properties: `schema_version: 1`, `type`,
-`title`, `aliases` (the display title, so `[[01 进程模型]]` resolves in Obsidian);
+`title`, `aliases` (the display title, available in Obsidian link completion);
 lecture-level files add `course` and `lecture`, chapter files add `section`;
 lecture indexes and chapters also carry `excerpt` (the chapter summary) and
 `tags` (the course name) for the blog the notes are published to. Types
@@ -247,11 +265,16 @@ A chapter file is the title number plus the section `slug`
 (`01 进程模型` + `process-model` → `01-process-model.md`); without a slug the
 section ID is used, and a collision appends the section ID. A non-ASCII slug fails
 publication. The Chinese title stays the H1, the `title` property and an alias.
+Published cross-chapter links use relative Markdown paths to the actual file,
+with Chinese display text. An alias is not used as a bare link destination.
 
 Each chapter contains: H1 title; top navigation; the `[!abstract]` key points;
 H2 concept sections with formulas, examples, comparisons and verified visuals;
 self-test callouts; a collapsed `> [!info]- 来源` list with merged page ranges per
-file; footnote definitions for markers used; and bottom navigation.
+file; footnote definitions for markers used; and bottom navigation. Formulas and
+variables use LaTeX in prose, summaries, tables and captions. Each figure has
+short plain-text alt text and a separate explanatory caption paragraph, so math
+can render outside the image.
 
 Navigation is `[本讲目录](../index.md) · [课程目录](../../index.md)` followed by
 `[上一节：NN Topic](<file>)` and `[下一节：NN Topic](<file>)` in final section

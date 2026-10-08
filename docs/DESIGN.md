@@ -45,12 +45,25 @@ examples and Q&A. Chapter headings are promoted outside code/math when splitting
 the assembled lecture. The active file and formatting contract is in
 [workflow.md](../skills/class-skipper/references/workflow.md).
 
+Writers link by stable section ID. Publication first assigns every chapter's
+final filename, then resolves references to relative Markdown links; Chinese
+titles remain display text and completion aliases. Full-title references from
+older drafts are accepted only when unique. Shared Markdown parsing protects
+code and math, preserves nested brackets in image descriptions, and supports
+reference diagnostics in the existing `check` command. Publication verifies
+reference integrity before writing files.
+
 Chapters follow the template in `references/note-style.md`. During full reading
 the agent views contact sheets of every PDF page, records figure candidates in
 the plan, and writers leave placeholders where those figures belong. The agent
 views each actual crop before replacing a placeholder; writers may add Mermaid
 diagrams for processes stated in the source, and verified external visual links
 go beside the matching concept. Only referenced local figures enter the output.
+Image alt text is short and plain; complete captions are separate paragraphs
+that can render LaTeX and are retained in visual readings. Writers and the single
+editor use source-grounded mathematical symbols and LaTeX throughout prose,
+summaries, tables and captions. Helpers report mechanical notation problems;
+they do not infer meanings or rewrite code and instruction fields as variables.
 Receipts compare expected file hashes before publication/export; edited files are
 preserved and complete replacements remain in workspace candidates. Structured
 export retains the complete navigation hierarchy. Earlier single-file notes can
@@ -63,5 +76,5 @@ macOS without a Unix launcher or Unix-only lock module. Chapter file names are
 English ASCII slugs, so they are portable and easy to type on both systems. SKILL.md maps each
 step to Codex and Claude Code tools, and the installer targets both hosts. Tests use labeled response
 doubles and real small parser fixtures. Actual Codex exercises are recorded
-separately in [CODEX_SKILL_REPORT.md](CODEX_SKILL_REPORT.md); macOS execution and
-human acceptance have not been established.
+separately in [CODEX_SKILL_REPORT.md](CODEX_SKILL_REPORT.md); offline helper tests
+do not establish a real host/course run or human acceptance.

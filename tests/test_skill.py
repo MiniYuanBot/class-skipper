@@ -2,11 +2,14 @@
 
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
+from urllib.parse import unquote
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "class-skipper" / "scripts"
 
@@ -35,6 +38,37 @@ def small_pdf(path):
 
 def note_name(section):
     return section["title"].split()[0] + "-" + section.get("slug", section["id"]) + ".md"
+
+
+def small_png(path):
+    """A real one-pixel PNG fixture; no model-generated or downloaded image."""
+
+    def chunk(kind, payload):
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload))
+        )
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">2I5B", 1, 1, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\xff\xff\xff"))
+        + chunk(b"IEND", b"")
+    )
+
+
+def model_section(section_id="concept", title="01 性能指标", slug="performance", body="知识正文。"):
+    """Labeled model double for publication/check tests, never a course run."""
+    return {
+        "id": section_id,
+        "title": title,
+        "slug": slug,
+        "summary": "说明指标含义",
+        "markdown": "### 定义\n\n" + body + "\n\n> [!question]- 自测：问题？\n> 答案。",
+        "source_ids": ["s1b1"],
+    }
 
 
 class OfflineSkillTests(unittest.TestCase):
@@ -456,6 +490,376 @@ class OfflineSkillTests(unittest.TestCase):
         self.assertEqual({issue["section"] for issue in result["issues"]}, {"section-2"})
         self.assertEqual(len(result["issues"]), 8)
         self.assertIn(self.cli("doctor")["status"], {"ready", "setup_needed"})
+
+    def test_bitfield_image_labels_publish_export_and_preserve_manual_edits(self):
+        prepared = self.prepare()
+        asset = self.base / "figure.png"
+        small_png(asset)
+        original_asset = asset.read_bytes()
+        caption = r"图：动态功耗近似为 $P \approx \frac{1}{2} C V^2 A f$。"
+        remote = '![远程图](https://example.invalid/figure_(1).png "remote title")'
+        export_command = (
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "export-vault",
+            "--course-name",
+            "课程",
+        )
+        for image in (
+            "![指令字段](assets/figure.png)",
+            "![立即数 imm[0:5] 与 Instr[6-0]](assets/figure.png)",
+            r'![字段 imm\[0:5\] 与 Instr\[6-0\]](assets/figure.png "位域图")',
+        ):
+            with self.subTest(image=image):
+                document = self.document(
+                    [model_section(body=image + "\n\n" + caption + "\n\n" + remote)]
+                )
+                command = ("publish", "--run", prepared["run"], "--document", document)
+                self.cli(*command, expected=2)
+                self.cli(*command, "--asset", asset)
+                chapter = self.root / "output/L01/chapters/01-performance.md"
+                body = chapter.read_text(encoding="utf-8")
+                self.assertIn(image.replace("assets/figure.png", "../assets/figure.png"), body)
+                self.assertIn(caption, body)
+                self.assertIn(remote, body)
+                self.assertEqual(
+                    (self.root / "output/L01/assets/figure.png").read_bytes(), original_asset
+                )
+                exported = self.cli(*export_command)
+                target = Path(exported["target"]) / "output/L01"
+                self.assertEqual((target / "assets/figure.png").read_bytes(), original_asset)
+                self.assertEqual(
+                    (target / "chapters/01-performance.md").read_bytes(), chapter.read_bytes()
+                )
+
+        exported_asset = target / "assets/figure.png"
+        exported_asset.write_bytes(b"manual image edit in the vault")
+        conflict = self.cli(*export_command, expected=5)
+        self.assertIn("output/L01/assets/figure.png", conflict["conflicts"])
+        self.assertEqual(exported_asset.read_bytes(), b"manual image edit in the vault")
+        published_asset = self.root / "output/L01/assets/figure.png"
+        published_asset.write_bytes(b"manual local image correction")
+        previous_chapter = chapter.read_bytes()
+        conflict = self.cli(*command, "--asset", asset, expected=5)
+        self.assertIn("L01/assets/figure.png", conflict["conflicts"])
+        self.assertEqual(published_asset.read_bytes(), b"manual local image correction")
+        self.assertEqual(chapter.read_bytes(), previous_chapter)
+        self.assertEqual(
+            (Path(conflict["candidate"]) / "L01/assets/figure.png").read_bytes(), original_asset
+        )
+
+    def test_image_examples_in_code_and_comments_are_not_assets(self):
+        prepared = self.prepare()
+        examples = (
+            "`![Power ≈ ½CV²Af](assets/inline.png)`\n\n"
+            "```markdown\n![imm[0:5]](assets/example.png)\n[[不存在]]\n```\n\n"
+            "<!-- ![Instr[6-0]](assets/comment.png) -->\n\n"
+            "$[x](section:missing)$"
+        )
+        section = model_section(body=examples)
+        document = self.document([section])
+        data = json.loads(document.read_text(encoding="utf-8"))
+        data["title"] = "L01 性能指标"
+        document = self.write_json("document.json", data)
+        result = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(result["status"], "ok")
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        body = (self.root / "output/L01/chapters/01-performance.md").read_text(encoding="utf-8")
+        self.assertIn(examples, body)
+        self.assertFalse((self.root / "output/L01/assets").exists())
+        exported = self.cli(
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "export-vault",
+            "--course-name",
+            "课程",
+        )
+        self.assertFalse((Path(exported["target"]) / "output/L01/assets").exists())
+
+    def test_legacy_publication_and_exports_keep_bitfield_images(self):
+        asset = self.base / "figure.png"
+        small_png(asset)
+        image = '![imm[0:5] 与 Instr[6-0]](assets/figure.png "bit fields")'
+        caption = r"图：功耗为 $P \approx \frac{1}{2} C V^2 A f$。"
+        for structured in (False, True):
+            with self.subTest(structured=structured):
+                self.root = self.base / ("legacy-structured" if structured else "legacy-note")
+                run = self.prepare_legacy()
+                if structured:
+                    document = self.document([model_section(body=image + "\n\n" + caption)])
+                    command = ("publish", "--run", run, "--document", document)
+                    published_relative = "demo/01/chapters/concept.md"
+                    exported_relative = published_relative
+                    exported_image = image.replace("assets/figure.png", "../assets/figure.png")
+                    exported_asset = "demo/01/assets/figure.png"
+                else:
+                    note = self.base / "legacy-note.md"
+                    note.write_text("# 内容\n\n" + image + "\n\n" + caption, encoding="utf-8")
+                    command = ("publish", "--run", run, "--note", note)
+                    published_relative = "demo/01/notes.md"
+                    exported_relative = "01.md"
+                    exported_image = image.replace("assets/figure.png", "assets/01/figure.png")
+                    exported_asset = "assets/01/figure.png"
+                self.cli(*command, expected=2)
+                self.cli(*command, "--asset", asset)
+                self.assertTrue((self.root / "output" / published_relative).is_file())
+                result = self.cli(
+                    "export",
+                    "--root",
+                    self.root,
+                    "--course",
+                    "demo",
+                    "--vault",
+                    self.base / "export-vault",
+                    "--course-name",
+                    "structured" if structured else "note",
+                )
+                target = Path(result["target"])
+                body = (target / exported_relative).read_text(encoding="utf-8")
+                self.assertIn(exported_image, body)
+                self.assertIn(caption, body)
+                self.assertEqual((target / exported_asset).read_bytes(), asset.read_bytes())
+
+    def test_math_check_covers_prose_summaries_indexes_and_image_alt(self):
+        prepared = self.prepare()
+        good = {
+            "schema_version": 1,
+            "title": "L01 功耗",
+            "introduction": "说明功耗来源。",
+            "synthesis": r"动态功耗为 $P \approx \frac{1}{2} C V^2 A f$。",
+            "uncertainties": [],
+            "sections": [
+                model_section(
+                    body=(
+                        "![功耗示意图](https://example.invalid/power.png)\n\n"
+                        r"图：$P \approx \frac{1}{2} C V^2 A f$，$x_0$ 为初值。"
+                        "\n\n位域 `imm[0:5]` 与 `Instr[6-0]` 保留代码语义。"
+                        "\n\n示例文本 `Power ≈ ½CV²Af`。\n\n```text\nx₀ = ½V²\n```"
+                    )
+                )
+            ],
+        }
+        document = self.write_json("math.json", good)
+        command = ("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(self.cli(*command)["status"], "ok")
+        for field, value in (
+            ("markdown", "正文 Power ≈ ½CV²Af。"),
+            ("markdown", "正文初始变量 x₀。"),
+            ("markdown", "正文比例 ⅓。"),
+            ("markdown", "![公式 $P = C V^2$](https://example.invalid/power.png)"),
+            ("summary", "电压为 V²"),
+            ("introduction", "比例为 ½"),
+            ("synthesis", "初始变量为 $x₀$"),
+        ):
+            with self.subTest(field=field, value=value):
+                candidate = json.loads(json.dumps(good))
+                if field in {"markdown", "summary"}:
+                    candidate["sections"][0][field] += "\n\n" + value
+                else:
+                    candidate[field] = value
+                self.write_json("math.json", candidate)
+                result = self.cli(*command)
+                self.assertEqual(result["status"], "issues")
+                self.assertTrue(result["issues"])
+
+    def test_section_links_resolve_forward_titles_fragments_and_reordering(self):
+        prepared = self.prepare()
+        untouched = (
+            "`[示例](section:power)`\n\n"
+            "```markdown\n[[02 动态功耗|例子]]\n```\n\n"
+            "$[x](section:power)$\n\n"
+            "[外部](https://example.invalid/section:power)"
+        )
+        first = model_section(
+            body=(
+                "[查看 [推导]](section:power#Power)\n\n"
+                "[旧标题](02 动态功耗.md#Power)\n\n"
+                "[[02 动态功耗#Power|自定义功耗]]\n\n"
+                "[[02 动态功耗]]\n\n"
+                "[[02 动态功耗#^power|公式块]]\n\n" + untouched
+            )
+        )
+        second = model_section("power", "02 动态功耗", "dynamic-power", "[指标](section:concept)")
+        data = {
+            "schema_version": 1,
+            "title": "L01 性能与功耗",
+            "introduction": "[先看功耗](section:power#Power)",
+            "synthesis": "[[01 性能指标|回看指标]]",
+            "uncertainties": [],
+            "sections": [first, second],
+        }
+        for sections in ([first, second], [second, first]):
+            with self.subTest(order=[section["id"] for section in sections]):
+                document = self.write_json("links.json", data | {"sections": sections})
+                checked = self.cli("check", "--run", prepared["run"], "--document", document)
+                self.assertEqual(checked["status"], "ok")
+                self.cli("publish", "--run", prepared["run"], "--document", document)
+                lecture = self.root / "output/L01"
+                body = (lecture / "chapters/01-performance.md").read_text(encoding="utf-8")
+                for expected in (
+                    "[查看 [推导]](02-dynamic-power.md#Power)",
+                    "[旧标题](02-dynamic-power.md#Power)",
+                    "[自定义功耗](02-dynamic-power.md#Power)",
+                    "[02 动态功耗](02-dynamic-power.md)",
+                    "[公式块](02-dynamic-power.md#^power)",
+                ):
+                    self.assertIn(expected, unquote(body))
+                self.assertIn(untouched, body)
+                self.assertIn(
+                    "[指标](01-performance.md)",
+                    (lecture / "chapters/02-dynamic-power.md").read_text(encoding="utf-8"),
+                )
+                index = (lecture / "index.md").read_text(encoding="utf-8")
+                self.assertIn("[先看功耗](chapters/02-dynamic-power.md#Power)", index)
+                self.assertIn("[回看指标](chapters/01-performance.md)", index)
+        exported = self.cli(
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "export-vault",
+            "--course-name",
+            "课程",
+        )
+        for relative in ("index.md", "chapters/01-performance.md", "chapters/02-dynamic-power.md"):
+            self.assertEqual(
+                (Path(exported["target"]) / "output/L01" / relative).read_bytes(),
+                (lecture / relative).read_bytes(),
+            )
+
+    def test_section_ids_resolve_distinct_files_when_title_and_slug_collide(self):
+        prepared = self.prepare()
+        sections = [
+            model_section("first", "01 重名", "same", "[下一项](section:second)"),
+            model_section("second", "01 重名", "same", "[上一项](section:first)"),
+        ]
+        document = self.document(sections)
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        chapters = self.root / "output/L01/chapters"
+        self.assertEqual(
+            {path.name for path in chapters.iterdir()}, {"01-same.md", "01-same-second.md"}
+        )
+        self.assertIn(
+            "[下一项](01-same-second.md)", (chapters / "01-same.md").read_text(encoding="utf-8")
+        )
+        self.assertIn(
+            "[上一项](01-same.md)", (chapters / "01-same-second.md").read_text(encoding="utf-8")
+        )
+
+    def test_second_filename_collision_cannot_overwrite_an_existing_chapter(self):
+        prepared = self.prepare()
+        sections = [
+            model_section("one", "01 Same", "x-b", "第一章独有内容。"),
+            model_section("two", "01 Same", "x", "第二章独有内容。"),
+        ]
+        document = self.document(sections)
+        command = ("publish", "--run", prepared["run"], "--document", document)
+        self.cli(*command)
+        output = self.root / "output"
+        before = {
+            path.relative_to(output): path.read_bytes()
+            for path in output.rglob("*")
+            if path.is_file()
+        }
+        sections.append(model_section("b", "01 Same", "x", "第三章不可覆盖第一章。"))
+        self.document(sections)
+        self.cli(*command, expected=2)
+        after = {
+            path.relative_to(output): path.read_bytes()
+            for path in output.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(after, before)
+
+    def test_encoded_hash_in_chapter_title_is_not_the_fragment_separator(self):
+        prepared = self.prepare()
+        section = model_section(
+            "csharp", "01 C#语言", "csharp", "### Heading\n\n[C#](01%20C%23语言#Heading)"
+        )
+        document = self.document([section])
+        data = json.loads(document.read_text(encoding="utf-8"))
+        data["title"] = "L01 编程语言"
+        self.write_json("document.json", data)
+        checked = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(checked["status"], "ok")
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        body = (self.root / "output/L01/chapters/01-csharp.md").read_text(encoding="utf-8")
+        self.assertIn("[C#](01-csharp.md#Heading)", body)
+
+    def test_unknown_and_ambiguous_internal_links_report_before_publication(self):
+        prepared = self.prepare()
+        for reference, duplicate_title in (
+            ("[失效](section:missing)", False),
+            ("[[不存在#Heading|失效]]", False),
+            ("[失效](missing.md)", False),
+            ("[歧义](01 重名)", True),
+        ):
+            with self.subTest(reference=reference):
+                sections = [model_section("first", "01 重名", "first", reference)]
+                if duplicate_title:
+                    sections.append(model_section("second", "01 重名", "second"))
+                document = self.document(sections)
+                data = json.loads(document.read_text(encoding="utf-8"))
+                data["title"] = "L01 引用"
+                self.write_json("document.json", data)
+                result = self.cli("check", "--run", prepared["run"], "--document", document)
+                self.assertEqual(result["status"], "issues")
+                self.assertTrue(any(issue["section"] == "first" for issue in result["issues"]))
+                self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+                self.assertEqual(list((self.root / "output").iterdir()), [])
+
+    def test_existing_cross_lecture_relative_links_keep_their_destinations(self):
+        target = self.prepare(lecture="02")
+        document = self.document([model_section("other", "02 其他主题", "other")])
+        self.cli("publish", "--run", target["run"], "--document", document)
+        prepared = self.prepare()
+        reference = "[其他讲义](../../L02/chapters/02-other.md#定义)"
+        document = self.document([model_section(body=reference)])
+        data = json.loads(document.read_text(encoding="utf-8"))
+        data["title"] = "L01 引用"
+        data["introduction"] = "[其他目录](../L02/index.md)"
+        self.write_json("document.json", data)
+        checked = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(checked["status"], "ok")
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        body = (self.root / "output/L01/chapters/01-performance.md").read_text(encoding="utf-8")
+        self.assertIn(reference, unquote(body))
+        self.assertIn(
+            "[其他目录](../L02/index.md)",
+            (self.root / "output/L01/index.md").read_text(encoding="utf-8"),
+        )
+
+    def test_cross_lecture_receipt_cannot_replace_a_deleted_target_file(self):
+        target = self.prepare(lecture="02")
+        document = self.document([model_section("other", "02 其他主题", "other")])
+        self.cli("publish", "--run", target["run"], "--document", document)
+        receipt = self.root / "workspace/publication/published.json"
+        previous_receipt = receipt.read_bytes()
+        self.assertIn("L02/chapters/02-other.md", json.loads(previous_receipt)["files"])
+        (self.root / "output/L02/chapters/02-other.md").unlink()
+        prepared = self.prepare()
+        document = self.document(
+            [model_section(body="[已删除的章节](../../L02/chapters/02-other.md#定义)")]
+        )
+        data = json.loads(document.read_text(encoding="utf-8"))
+        data["title"] = "L01 引用"
+        self.write_json("document.json", data)
+        checked = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(checked["status"], "issues")
+        self.assertTrue(any(issue["section"] == "concept" for issue in checked["issues"]))
+        self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+        self.assertFalse((self.root / "output/L01").exists())
+        self.assertEqual(receipt.read_bytes(), previous_receipt)
 
     def test_complete_utf8_materials_identity_and_no_repository_dependency(self):
         first = self.prepare()

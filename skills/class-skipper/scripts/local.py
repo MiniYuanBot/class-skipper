@@ -2,18 +2,20 @@
 
 import argparse
 import json
+import posixpath
 import re
 import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import quote, unquote
 
+from markdown_tools import math_issues, scan_markdown
 from materials import page_count, page_images, read_materials, render_page
 from storage import RESERVED, atomic, digest, managed, read_json, slug, write_json
 
 PARSER_VERSION = 1
 COURSE_LAYOUT = "course-root-v1"
-IMAGE = re.compile(r"!\[([^\]]*)\]\(([^()]+)\)")
 REMOTE = re.compile(r"^https?://", re.IGNORECASE)
 FOOTNOTE = re.compile(r"\[\^([^\]\s]+)\](?!:)")
 DEFINITION = re.compile(r"^\[\^([^\]\s]+)\]:", re.MULTILINE)
@@ -339,18 +341,43 @@ def referenced_assets(body, supplied):
         if path.name.casefold() in {name.casefold() for name in by_name}:
             raise ValueError("Asset filenames must be unique.")
         by_name[path.name] = path
-    for _, reference in IMAGE.findall(body):
-        if REMOTE.match(reference):
+    for reference in image_references(body):
+        filename = asset_filename(reference.target)
+        if filename is None:
             continue
-        if not reference.startswith("assets/"):
-            raise ValueError("Published images must use assets/FILENAME or https:// paths.")
-        filename = reference[len("assets/") :]
-        if not filename or Path(filename).name != filename or "\\" in filename:
-            raise ValueError("Published asset path must contain a single filename.")
         if filename not in by_name:
             raise ValueError(f"Referenced asset was not supplied: {filename}")
         assets["assets/" + filename] = by_name[filename].read_bytes()
     return assets
+
+
+def image_references(body):
+    references, issues = scan_markdown(body)
+    if issues:
+        line, message = issues[0]
+        raise ValueError(f"Markdown line {line}: {message}")
+    return [ref for ref in references if ref.kind == "image"]
+
+
+def asset_filename(target):
+    if REMOTE.match(target):
+        return None
+    target = unquote(target)
+    if not target.startswith("assets/"):
+        raise ValueError("Published images must use assets/FILENAME or https:// paths.")
+    filename = target[len("assets/") :]
+    if not filename or Path(filename).name != filename or "\\" in filename:
+        raise ValueError("Published asset path must contain a single filename.")
+    return folder_name(filename)
+
+
+def rewrite_images(body, rewrite):
+    """Change only local destination spans, retaining alt text, escaping and titles."""
+    for ref in reversed(image_references(body)):
+        if not REMOTE.match(ref.target):
+            target = rewrite(body[ref.target_start : ref.target_end])
+            body = body[: ref.target_start] + target + body[ref.target_end :]
+    return body
 
 
 def sync_files(target, files, receipt, candidates, *, remove=()):
@@ -469,8 +496,121 @@ def chapter_filename(title, slug_value, section_id, used):
         name = f"{number[0]}-{name}"
     if name.casefold() in used:
         name = f"{name}-{section_id}"
+    if name.casefold() in used:
+        raise ValueError("Chapter filenames still collide; choose a unique section slug.")
     used.add(name.casefold())
     return name + ".md"
+
+
+def chapter_targets(sections, metadata):
+    """Allocate every filename before resolving forward or title-based references."""
+    targets, ids, used = [], set(), set()
+    for section in sections:
+        if not isinstance(section, dict) or not isinstance(section.get("id"), str):
+            raise ValueError("Each section needs a string id and chapter fields.")
+        section_id = slug(section["id"])
+        if section_id.casefold() in ids:
+            raise ValueError("Section IDs must be unique, including Windows case folding.")
+        ids.add(section_id.casefold())
+        title = text(section.get("title", ""))
+        filename = (
+            chapter_filename(title, section.get("slug"), section_id, used)
+            if metadata.get("layout") == COURSE_LAYOUT
+            else section_id + ".md"
+        )
+        targets.append((section_id, title, filename))
+    return targets
+
+
+def link_context(targets, metadata):
+    prefix = metadata["lecture"] + "/"
+    scope = "" if metadata.get("layout") == COURSE_LAYOUT else metadata["course"] + "/"
+    prefix = scope + prefix
+    receipt = managed(metadata["root"], "workspace", "publication", "published.json")
+    previous = read_json(receipt).get("files", {}) if receipt.exists() else {}
+    # Exclude retiring chapters in this lecture; retain valid cross-lecture destinations.
+    known = {
+        path
+        for path in previous
+        if path.endswith(".md")
+        and path.startswith(scope)
+        and not path.startswith(prefix)
+        and managed(metadata["root"], "output", path).is_file()
+    }
+    known.update(prefix + "chapters/" + filename for _, _, filename in targets)
+    known.update({"index.md", prefix + "index.md"})
+    if metadata.get("layout") != COURSE_LAYOUT:
+        known.add(metadata["course"] + "/index.md")
+    return targets, prefix, known
+
+
+def rewrite_section_links(body, context, current):
+    """Resolve this lecture's IDs/titles and validate relative published note paths."""
+    targets, prefix, known = context
+    references, issues = scan_markdown(body)
+    edits = []
+    for ref in references:
+        line = body.count("\n", 0, ref.start) + 1
+        if ref.kind == "image":
+            try:
+                asset_filename(ref.target)
+            except ValueError as exc:
+                issues.append((line, str(exc)))
+            continue
+        target, separator, fragment = ref.target.partition("#")
+        target, fragment = unquote(target), unquote(fragment)
+        if (
+            target
+            and not target.startswith("section:")
+            and (re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target) or target.startswith("//"))
+        ):
+            continue
+        destination = None
+        if target.startswith("section:"):
+            matches = [filename for sid, _, filename in targets if sid == target[8:]]
+        else:
+            title = target.removesuffix(".md")
+            matches = [filename for _, name, filename in targets if name == title] if title else []
+        if len(matches) > 1:
+            issues.append((line, f"Ambiguous chapter reference: {ref.target}"))
+            continue
+        if matches:
+            destination = posixpath.relpath(
+                prefix + "chapters/" + matches[0], posixpath.dirname(current)
+            )
+        elif not target:
+            destination = ""
+        elif not target.startswith("section:"):
+            path = posixpath.normpath(posixpath.join(posixpath.dirname(current), target))
+            candidates = [path, path + ".md"]
+            if ref.kind == "wiki":
+                candidates += [target, target + ".md"]
+            found = next((candidate for candidate in candidates if candidate in known), None)
+            if found:
+                destination = posixpath.relpath(found, posixpath.dirname(current))
+        if destination is None:
+            issues.append((line, f"Unknown internal chapter reference: {ref.target}"))
+            continue
+        destination = quote(destination, safe="/-._~")
+        if separator:
+            destination += "#" + quote(fragment, safe="/-._~^#")
+        if ref.kind == "wiki":
+            # A wiki label is plain display text; brackets need Markdown escaping.
+            display = re.sub(r"(?<!\\)([\[\]])", r"\\\1", ref.label)
+            edits.append((ref.start, ref.end, f"[{display}]({destination})"))
+        else:
+            edits.append((ref.target_start, ref.target_end, destination))
+    for start, end, replacement in reversed(edits):
+        body = body[:start] + replacement + body[end:]
+    return body, sorted(issues)
+
+
+def resolved_body(body, context, current):
+    body, issues = rewrite_section_links(body, context, current)
+    if issues:
+        line, message = issues[0]
+        raise ValueError(f"{current} line {line}: {message}")
+    return body
 
 
 def source_lines(references, units, sources):
@@ -597,16 +737,30 @@ def markdown_issues(body, units):
         issues.append((0, "Unbalanced $$ display-math delimiters."))
     if "[!question]" not in body:
         issues.append((0, "Missing [!question] self-test callout."))
-    return issues
+    return issues + math_issues(body)
 
 
 def check(args):
-    run, _ = get_run(args.run)
+    run, metadata = get_run(args.run)
     document = read_json(args.document)
     units = {unit["id"] for unit in read_json(run / "materials.json")["units"]}
     issues = []
     if not LECTURE_TITLE.fullmatch(text(document.get("title", ""))):
         issues.append({"section": None, "line": 0, "message": "Lecture title must be LXX Topic."})
+    context = None
+    try:
+        context = link_context(chapter_targets(document.get("sections", []), metadata), metadata)
+    except ValueError as exc:
+        issues.append({"section": None, "line": 0, "message": str(exc)})
+    for field in ("title", "introduction", "synthesis"):
+        body = text(document.get(field, ""))
+        found = math_issues(body)
+        if context:
+            found += rewrite_section_links(body, context, context[1] + "index.md")[1]
+        issues += [
+            {"section": None, "line": line, "message": f"{field}: {message}"}
+            for line, message in found
+        ]
     for section in document.get("sections", []):
         found = []
         if not SECTION_TITLE.fullmatch(text(section.get("title", ""))):
@@ -616,6 +770,17 @@ def check(args):
         if not ENGLISH_SLUG.fullmatch(str(section.get("slug") or "")):
             found.append((0, "Add an English kebab-case slug for the file name."))
         found += markdown_issues(text(section.get("markdown", "")), units)
+        if context:
+            filename = next(name for sid, _, name in context[0] if sid == section["id"])
+            found += rewrite_section_links(
+                text(section.get("markdown", "")), context, context[1] + "chapters/" + filename
+            )[1]
+        for field in ("title", "summary"):
+            value = text(section.get(field, ""))
+            extra = math_issues(value)
+            if context:
+                extra += rewrite_section_links(value, context, context[1] + "index.md")[1]
+            found += [(line, f"{field}: {message}") for line, message in extra]
         issues += [
             {"section": section.get("id"), "line": line, "message": message}
             for line, message in found
@@ -645,14 +810,16 @@ def publish(args):
     units = {unit["id"]: unit for unit in materials["units"]}
     sources = {source["id"]: source for source in materials["sources"]}
     course_layout = metadata.get("layout") == COURSE_LAYOUT
-    chapters, ids, filenames = [], set(), set()
-    for section in sections:
-        if not isinstance(section, dict) or not isinstance(section.get("id"), str):
-            raise ValueError("Each section needs a string id and chapter fields.")
-        section_id = slug(section["id"])
-        if section_id.casefold() in ids:
-            raise ValueError("Section IDs must be unique, including Windows case folding.")
-        ids.add(section_id.casefold())
+    targets = chapter_targets(sections, metadata)
+    context = link_context(targets, metadata)
+    prefix = context[1]
+    introduction = resolved_body(introduction, context, prefix + "index.md")
+    synthesis = resolved_body(synthesis, context, prefix + "index.md")
+    uncertainties = [
+        resolved_body(text(item), context, prefix + "index.md") for item in uncertainties
+    ]
+    chapters = []
+    for section, (section_id, _, filename) in zip(sections, targets):
         body, chapter_title = text(section["markdown"]), text(section["title"])
         references = section["source_ids"]
         if not body or not chapter_title or "本节生成暂未完成" in body:
@@ -667,11 +834,8 @@ def publish(args):
         summary = section.get("summary", "")
         if not isinstance(summary, str):
             raise ValueError("Section summary must be a string.")
-        filename = (
-            chapter_filename(chapter_title, section.get("slug"), section_id, filenames)
-            if course_layout
-            else section_id + ".md"
-        )
+        body = resolved_body(body, context, prefix + "chapters/" + filename)
+        summary = resolved_body(text(summary).replace("\n", " "), context, prefix + "index.md")
         definitions = footnotes(body, units, sources)
         body = (
             chapter_headings(body)
@@ -680,15 +844,21 @@ def publish(args):
         )
         if definitions:
             body += "\n\n" + definitions
-        chapters.append((section_id, chapter_title, filename, body, label(summary)))
-    all_body = "\n".join([introduction, synthesis, *[chapter[3] for chapter in chapters]])
+        chapters.append((section_id, chapter_title, filename, body, summary))
+    all_body = "\n".join(
+        [
+            introduction,
+            synthesis,
+            *uncertainties,
+            *[chapter[3] + "\n" + chapter[4] for chapter in chapters],
+        ]
+    )
     if "本节生成暂未完成" in all_body:
         raise ValueError("Publication document contains an incomplete draft marker.")
     assets = referenced_assets(all_body, args.asset or [])
     course, lecture = metadata["course"], metadata["lecture"]
     root = Path(metadata["root"])
     target, base = managed(root, "output"), managed(root, "workspace", "publication")
-    prefix = f"{lecture}/" if course_layout else f"{course}/{lecture}/"
     files = {prefix + name: raw for name, raw in assets.items()}
     links = "\n".join(
         f"- [{label(chapter_title)}](chapters/{filename})" + (f"：{summary}" if summary else "")
@@ -717,10 +887,7 @@ def publish(args):
         tags=tags,
     )
     for position, (section_id, chapter_title, filename, body, summary) in enumerate(chapters):
-        body = IMAGE.sub(
-            lambda match: match[0] if REMOTE.match(match[2]) else f"![{match[1]}](../{match[2]})",
-            body,
-        )
+        body = rewrite_images(body, lambda target: "../" + target)
         navigation = "[本讲目录](../index.md) · [课程目录](../../index.md)"
         if not course_layout:
             navigation += " · [全部课程](../../../index.md)"
@@ -838,9 +1005,10 @@ def export(args):
         if not body.strip() or "本节生成暂未完成" in body:
             raise ValueError(f"{relative} is incomplete.")
         files["output/" + relative] = body.encode("utf-8")
-        for _, reference in IMAGE.findall(body):
-            if REMOTE.match(reference):
+        for ref in image_references(body):
+            if REMOTE.match(ref.target):
                 continue
+            reference = unquote(ref.target)
             unresolved = (note.parent / reference).resolve()
             if not unresolved.is_relative_to(source.resolve()):
                 raise ValueError("Exported image must stay inside the course output.")
@@ -889,9 +1057,10 @@ def export_legacy(args):
         if not body.strip() or "本节生成暂未完成" in body:
             raise ValueError(f"{lecture} is incomplete; resume writing before export.")
         supplied = []
-        for _, reference in IMAGE.findall(body):
-            if REMOTE.match(reference):
+        for ref in image_references(body):
+            if REMOTE.match(ref.target):
                 continue
+            reference = unquote(ref.target)
             if not reference.startswith("assets/"):
                 raise ValueError("Export expects relative published image references.")
             supplied.append(managed(source, lecture, reference))
@@ -899,7 +1068,9 @@ def export_legacy(args):
         for relative, raw in assets.items():
             filename = relative[len("assets/") :]
             files[f"assets/{lecture}/{filename}"] = raw
-            body = body.replace(f"]({relative})", f"](assets/{lecture}/{filename})")
+        body = rewrite_images(
+            body, lambda target: target.replace("assets/", f"assets/{lecture}/", 1)
+        )
         files[lecture + ".md"] = body.encode("utf-8")
         index = index.replace(f"]({lecture}/notes.md)", f"]({lecture}.md)")
     if notes:
@@ -935,9 +1106,10 @@ def structured_export(root, course, source, entry):
         if not body.strip() or "本节生成暂未完成" in body:
             raise ValueError(f"{relative} is incomplete.")
         files[relative] = body.encode("utf-8")
-        for _, reference in IMAGE.findall(body):
-            if REMOTE.match(reference):
+        for ref in image_references(body):
+            if REMOTE.match(ref.target):
                 continue
+            reference = unquote(ref.target)
             unresolved = note.parent / reference
             if not unresolved.resolve().is_relative_to(source.resolve()):
                 raise ValueError("Exported image must stay inside its course folder.")
