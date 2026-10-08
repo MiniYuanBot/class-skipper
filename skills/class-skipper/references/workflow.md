@@ -236,7 +236,9 @@ single-file publications only; new runs use `--document`.
 
 All notes and indexes begin with YAML properties: `schema_version: 1`, `type`,
 `title`, `aliases` (the display title, so `[[01 进程模型]]` resolves in Obsidian);
-lecture-level files add `course` and `lecture`, chapter files add `section`. Types
+lecture-level files add `course` and `lecture`, chapter files add `section`;
+lecture indexes and chapters also carry `excerpt` (the chapter summary) and
+`tags` (the course name) for the blog the notes are published to. Types
 are `course-index`, `lecture-index` and `course-note`. No private absolute paths,
 prompts, cache identifiers or logs appear in published notes.
 

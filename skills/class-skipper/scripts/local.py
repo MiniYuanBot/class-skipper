@@ -521,7 +521,7 @@ def sources_callout(lines):
     return "> [!info]- 来源\n" + "\n".join(f"> - {line}" for line in lines)
 
 
-def markdown_page(kind, metadata, title, body, section=None):
+def markdown_page(kind, metadata, title, body, section=None, excerpt="", tags=()):
     fields = {
         "schema_version": 1,
         "type": kind,
@@ -531,6 +531,13 @@ def markdown_page(kind, metadata, title, body, section=None):
     fields.update({key: metadata[key] for key in ("course", "lecture") if key in metadata})
     if section:
         fields["section"] = section
+    # `excerpt` and `tags` feed the listing cards of the blog the notes are
+    # published to; it takes the publication date from git, so none is written.
+    if text(excerpt):
+        fields["excerpt"] = label(excerpt)
+    tags = [label(tag) for tag in tags if text(tag)]
+    if tags:
+        fields["tags"] = tags
     header = (
         "---\n"
         + "".join(f"{k}: {json.dumps(v, ensure_ascii=False)}\n" for k, v in fields.items())
@@ -699,8 +706,17 @@ def publish(args):
         )
     locations = list(dict.fromkeys(ref for section in sections for ref in section["source_ids"]))
     lecture_body += "\n\n" + sources_callout(source_lines(locations, units, sources))
-    files[prefix + "index.md"] = markdown_page("lecture-index", metadata, title, lecture_body)
-    for position, (section_id, chapter_title, filename, body, _) in enumerate(chapters):
+    course_name = metadata["options"].get("course_name", course)
+    tags = [course_name]
+    files[prefix + "index.md"] = markdown_page(
+        "lecture-index",
+        metadata,
+        title,
+        lecture_body,
+        excerpt=f"{course_name} {label(title)}",
+        tags=tags,
+    )
+    for position, (section_id, chapter_title, filename, body, summary) in enumerate(chapters):
         body = IMAGE.sub(
             lambda match: match[0] if REMOTE.match(match[2]) else f"![{match[1]}](../{match[2]})",
             body,
@@ -723,6 +739,8 @@ def publish(args):
             chapter_title,
             navigation + "\n\n" + body + "\n\n" + navigation,
             section_id,
+            excerpt=summary or f"{course_name} {label(title)}",
+            tags=tags,
         )
     with lock(base / ".publish-lock"):
         registry_path = managed(base, "courses.json")
