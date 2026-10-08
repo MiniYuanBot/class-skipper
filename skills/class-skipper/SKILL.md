@@ -113,7 +113,9 @@ Quality requirements a writer must meet (details in note-style.md):
 - `[!abstract] 本节要点` with 3–5 recallable conclusions;
 - each concept: motivation → precise definition with conditions → mechanism in
   steps → worked example → real pitfalls;
-- every formula, symbol, unit, code semantic and reasoning step preserved;
+- every formula, symbol, unit, code semantic and reasoning step preserved, with
+  LaTeX math in prose, summaries, tables and captions;
+- cross-chapter references as `[中文说明](section:section-id)` using plan IDs;
 - `<!-- figure: <unit-id> -->` placeholders where assigned figures belong, and
   Mermaid diagrams for source-described processes, states or hierarchies;
 - labeled callouts for supplements (`补充解释`), instructor emphasis (`课堂强调`),
@@ -126,7 +128,8 @@ Validate and cache each response independently.
 ## 3. Add visuals
 
 Follow visuals.md. Crop each candidate with `render`, **view the saved crop**, and
-replace its placeholder with an image and a one-sentence caption, or remove the
+replace its placeholder with an image (short plain-text alt) and a separate
+one-sentence caption paragraph that can render LaTeX, or remove the
 placeholder if the crop is decorative, illegible or unverifiable. Aim for one or
 two figures per chapter. With web access, add at most one or two verified external
 visualizations per chapter (fetch every URL first) in a `[!info] 可视化资源`
@@ -139,9 +142,10 @@ Assemble the draft in plan order. Delegate **one** editor the complete draft,
 all original material (in bounded ranges if large), the plan, visual readings and
 the shared writing brief. The editor corrects directly: coverage gaps, wrong
 formulas/code/conditions, duplicated explanations across chapters, template
-compliance, classroom narration, weak self-tests, title consistency and Markdown
-syntax, and writes the `introduction` and `synthesis` (see note-style.md). It
-preserves verified figures, citations and justified instructor emphasis.
+compliance, classroom narration, weak self-tests, title/link consistency and
+LaTeX/Markdown syntax, and writes the `introduction` and `synthesis` (see
+note-style.md). It preserves verified figures, citations and justified instructor
+emphasis.
 
 Apply the editor's result, write `revision/review.json` and
 `final/document.json`, run `check` once and fix every reported item, then

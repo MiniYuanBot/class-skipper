@@ -64,13 +64,18 @@ Name crops `<lecture>-<english-topic>.png` in lowercase English ASCII with hyphe
 unique within the lecture. Replace the placeholder with
 
 ```markdown
-![单周期数据通路：PC、指令存储器、寄存器堆、ALU 与数据存储器的连接](assets/l03-single-cycle-datapath.png)
+![单周期数据通路](assets/l03-single-cycle-datapath.png)
+
+图：对照 PC、指令存储器、寄存器堆、ALU 与数据存储器的连接，追踪指令的执行路径。
 ```
 
-The alt text is the caption: say what the figure shows and what to look at, in
-one sentence. Remove placeholders whose candidate was rejected. Delegate candidate
-batches to visual workers when the host can view images in subagents; otherwise
-the coordinator does this step.
+Use short plain-text alt text, then a separate one-sentence caption paragraph
+saying what the figure shows and what to look at. Formulas belong in the caption
+as `$...$` LaTeX, never in image alt text, where they cannot reliably render.
+Keep field names such as `imm[0:5]` and `Instr[6-0]` intact; square brackets do not
+end a caption. Remove placeholders whose candidate was rejected. Delegate
+candidate batches to visual workers when the host can view images in subagents;
+otherwise the coordinator does this step.
 
 ## External visual resources (step 3)
 
@@ -91,7 +96,8 @@ an online CPU/pipeline simulator, or a library's official interactive demo).
   ```
 
 - Embed a remote image (`![说明](https://upload.wikimedia.org/...)`) only for a
-  stable, freely licensed file whose direct URL you fetched.
+  stable, freely licensed file whose direct URL you fetched. Use the same short
+  alt text and separate caption convention as for local images.
 - Put the callout beside the concept it illustrates, not in a link dump at the
   end of the chapter.
 
@@ -111,7 +117,9 @@ Write `visuals/readings.json`:
 ]}
 ```
 
-`status` is `verified` or `skipped` (with a short `reason`). When the host cannot
-view images, set the top-level status to `skipped`, keep the candidate list, and
-report that visual reading was unavailable. Cache visual readings keyed by the
-crop bytes, the crop coordinates and the relevant source text.
+`caption` stores the complete explanatory caption, including LaTeX when needed;
+escape backslashes as required by JSON. It is separate from the image's short
+alt text. `status` is `verified` or `skipped` (with a short `reason`). When the host
+cannot view images, set the top-level status to `skipped`, keep the candidate
+list, and report that visual reading was unavailable. Cache visual readings
+keyed by the crop bytes, the crop coordinates and the relevant source text.

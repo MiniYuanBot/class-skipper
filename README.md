@@ -88,13 +88,19 @@ The notebook root keeps `.obsidian/`; each course folder has its own `input/`,
 ```
 
 File and folder names are English; note content is Chinese. Each chapter note
-has YAML properties (with its Chinese title as an alias for `[[wikilinks]]`),
+has YAML properties (with its Chinese title as an alias for link completion),
 previous/next and directory navigation at top and bottom, a key-point callout,
 concept sections with formulas, examples, figures and Mermaid diagrams,
 collapsed self-tests, footnotes on key results and a collapsed source list with
 merged page ranges. Publication preserves manual edits: a conflicting file is
 left untouched and the new version is saved as a candidate in workspace.
 Earlier runs keep their original paths and `section-N.md` filenames.
+
+Cross-chapter links use relative Markdown paths to the actual English filenames,
+with Chinese display text. Writers reference stable chapter IDs; publication
+resolves them and reports unknown or ambiguous targets. Math uses LaTeX in
+prose, summaries, tables and figure captions. Image alt text stays short and
+plain; the complete caption is a paragraph below the image so formulas render.
 
 See [SKILL.md](skills/class-skipper/SKILL.md), the
 [workflow contract](skills/class-skipper/references/workflow.md), the
