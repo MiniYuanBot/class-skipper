@@ -5,8 +5,8 @@ planning, chapter writing, optional selective visual reading, and one editorial
 revision. The current Codex session and available native subagents perform all
 model work. Its Python helpers do not import a model client, read provider
 environment files, invoke a nested Codex CLI, or make model/OCR network calls.
-The repository contains only the Codex skill and local helpers. The installer copies only the
-skill files and preserves differing installed content. Users place sources in
+The repository contains only the Codex skill and local helpers. The installer links the
+skill folder into each host (symlink, or junction on Windows) and preserves an existing folder or foreign link. Users place sources in
 `input/`; run data, requests, chapter responses, visual records, drafts, revision
 responses and caches stay in `workspace/`. Structured publication creates an
 Obsidian course notes under `<vault>/<course>/output/`, with course/lecture

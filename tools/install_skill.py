@@ -1,64 +1,56 @@
-"""Copy the portable skill for Codex and/or Claude Code without overwriting local edits."""
+"""Link the portable skill into Codex and/or Claude Code so repository edits apply at once."""
 
 import argparse
-import hashlib
 import os
-import shutil
-import tempfile
+import subprocess
 from pathlib import Path
 
 
-def files(folder):
-    result = {}
-    for path in folder.rglob("*"):
-        if path.is_symlink():
-            raise ValueError("Skill installation does not copy symlinks.")
-        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
-            result[path.relative_to(folder).as_posix()] = hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
-    return result
+def is_linked(destination, source):
+    return destination.exists() and destination.resolve() == source
+
+
+def create_link(source, destination):
+    if os.name == "nt":
+        # Junctions need no administrator rights or developer mode.
+        try:
+            subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(destination), str(source)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise OSError(f"mklink /J failed: {exc.stdout}{exc.stderr}".strip()) from exc
+    else:
+        destination.symlink_to(source, target_is_directory=True)
 
 
 def install(source, destination, *, update=False):
     source = source.resolve(strict=True)
     destination = destination.expanduser().absolute()
-    if any(path.is_symlink() for path in [destination, *destination.parents]):
-        raise ValueError("Installation paths cannot contain symlinks.")
-    if source == destination.resolve() or source in destination.resolve().parents:
-        raise ValueError("Installation must be separate from the source folder.")
     if not (source / "SKILL.md").is_file():
         raise ValueError("Source must contain SKILL.md.")
-    expected = files(source)
-    if destination.exists():
-        if not destination.is_dir():
-            raise ValueError("Destination is not a folder; existing file preserved.")
-        current = files(destination)
-        if current == expected:
-            return destination
+    if is_linked(destination, source):
+        return destination
+    parent = destination.parent.resolve()
+    if parent == source or source in parent.parents:
+        raise ValueError("Installation must be separate from the source folder.")
+    if os.path.lexists(destination):
         if not update:
             raise ValueError(
-                "Destination differs; existing skill preserved. "
-                "Use --update to back it up and replace it, or choose another folder."
+                "Destination exists and does not link to this repository; existing "
+                "folder preserved. Use --update to back it up and link the new version, "
+                "or choose another folder."
             )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix=".class-skipper-", dir=destination.parent))
-    try:
-        for relative in expected:
-            target = temporary / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source / relative, target)
-        if destination.exists():
-            backup = destination.with_name(destination.name + ".backup")
-            number = 1
-            while backup.exists():
-                number += 1
-                backup = destination.with_name(f"{destination.name}.backup{number}")
-            destination.rename(backup)
-        temporary.rename(destination)
-    finally:
-        if temporary.exists():
-            shutil.rmtree(temporary)
+        backup = destination.with_name(destination.name + ".backup")
+        number = 1
+        while os.path.lexists(backup):
+            number += 1
+            backup = destination.with_name(f"{destination.name}.backup{number}")
+        destination.rename(backup)
+    parent.mkdir(parents=True, exist_ok=True)
+    create_link(source, destination)
     return destination
 
 
@@ -89,14 +81,14 @@ def main():
     parser.add_argument(
         "--update",
         action="store_true",
-        help="Replace a differing installed copy after renaming it to class-skipper.backup*.",
+        help="Replace a differing destination after renaming it to class-skipper.backup*.",
     )
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1] / "skills" / "class-skipper"
     code = 0
     for destination in [args.destination] if args.destination else targets(args.host):
         try:
-            print(f"Installed: {install(source, destination, update=args.update)}")
+            print(f"Linked: {install(source, destination, update=args.update)} -> {source}")
         except (ValueError, OSError) as exc:
             print(f"Skipped {destination}: {exc}")
             code = 2

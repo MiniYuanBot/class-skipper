@@ -39,7 +39,8 @@ py -3 tools/install_skill.py
 python3 tools/install_skill.py
 ```
 
-By default the installer copies `skills/class-skipper` to both hosts:
+By default the installer links `skills/class-skipper` into both hosts, so edits
+in this repository apply without reinstalling (macOS/Linux: symlink; Windows: junction):
 
 | Host | Default location |
 | --- | --- |
@@ -48,8 +49,8 @@ By default the installer copies `skills/class-skipper` to both hosts:
 
 Use `--host codex` or `--host claude` for one host, or `--destination` for an
 exact folder (for example a project's `.claude/skills/class-skipper`). A differing
-installed copy is preserved; `--update` renames it to `class-skipper.backup*`
-and installs the new version. Copying the folder by hand also works.
+existing folder or link to another location is preserved; `--update` renames it to
+`class-skipper.backup*` and links the new version. Copying the folder by hand also works.
 
 ## Use
 

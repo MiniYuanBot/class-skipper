@@ -34,7 +34,8 @@ py -3 tools/install_skill.py
 python3 tools/install_skill.py
 ```
 
-默认同时安装到两个宿主：
+默认同时把 `skills/class-skipper` 链接到两个宿主，因此修改本仓库后无需重新安装
+（macOS/Linux 使用符号链接，Windows 使用 junction）：
 
 | 宿主 | 默认位置 |
 | --- | --- |
@@ -42,8 +43,8 @@ python3 tools/install_skill.py
 | Claude Code | `$CLAUDE_CONFIG_DIR/skills/class-skipper`，否则 `~/.claude/skills/class-skipper` |
 
 用 `--host codex` 或 `--host claude` 只装一个，用 `--destination` 指定精确目录
-（例如某个项目的 `.claude/skills/class-skipper`）。已安装内容不同时默认保留不动；
-加 `--update` 会先把旧版本改名为 `class-skipper.backup*` 再安装。也可以手动复制整个文件夹。
+（例如某个项目的 `.claude/skills/class-skipper`）。已存在的文件夹或指向其他位置的链接默认保留不动；
+加 `--update` 会先把旧内容改名为 `class-skipper.backup*` 再链接新版本。也可以手动复制整个文件夹。
 
 ## 使用
 
