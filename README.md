@@ -11,7 +11,14 @@ work to native subagents when available:
 
 1. **Read and plan**: read every extracted unit, view labeled slide contact sheets
    to catch diagrams and scanned pages, and plan 4–8 chapters with figure
-   candidates and concept ownership.
+   candidates and concept ownership. When a transcript exists it defines the
+   lecture's scope: slides carried over from the previous deck are included,
+   untaught slides move to the lecture that teaches them, and slides the
+   instructor leaves as extension are still written, labeled 拓展.
+   With the optional `thought_questions` switch, instructor thought questions are
+   written beside their concepts with a hint and a folded solution, exam hints
+   are marked only when the transcript states them, and `output/questions.md`
+   collects them for the whole course.
 2. **Write chapters**: writers follow a fixed template: key-point summary,
    motivation → definition → mechanism → example → pitfalls, Mermaid diagrams for
    source-described processes, labeled supplement callouts, and hidden-answer
@@ -68,6 +75,43 @@ Claude Code also loads the skill automatically when you ask for lecture notes.
 The skill checks Python with `scripts/local.py doctor` and installs only missing
 parser packages (`pypdfium2`, `Pillow`, `python-docx`, `python-pptx`) into
 `<course>/workspace/.venv`.
+
+## Course manifest
+
+Put a course's sources in `<course-folder>/input/`, for example `L02/slides.pdf`
+and `L02/transcript.docx`. An optional `input/course.yaml` makes lecture pairing,
+order and run options explicit; copy
+[`course.example.yaml`](skills/class-skipper/references/course.example.yaml) and
+edit it. Paths are relative to the manifest. Without a manifest the skill pairs
+files by name and asks when that is ambiguous.
+
+```yaml
+schema_version: '1'
+title: 操作系统
+options:
+  thought_questions: true                  # default false
+  thought_question_terms: [思考题, Think]   # optional
+lectures:
+- id: l02
+  title: 操作系统的四个基本概念
+  slides: [L02/slides.pdf]
+  transcripts: [L02/transcript.docx]
+```
+
+| Field | Meaning |
+| --- | --- |
+| `title` | Course name shown in `output/index.md` |
+| `lectures[].id` | Lecture number; `l2`, `02` and `L02` all become `L02` |
+| `lectures[].title` | Lecture topic; the note title becomes `L02 Topic` |
+| `lectures[].slides`, `transcripts` | Every file for that lecture; several are allowed |
+| `options` | Run options for every lecture; `lectures[].options` overrides them per lecture |
+| `options.thought_questions` | Write instructor thought questions with hints, folded solutions and summaries |
+| `options.thought_question_terms` | What this instructor calls them, for more precise matching |
+
+List only each lecture's own deck. When a transcript finishes the previous deck
+or starts the next one, the skill reads the adjacent decks itself, so the
+transcript decides what each lecture's notes cover. Changing options starts a
+new run for that lecture; manually edited notes are still preserved.
 
 ## Layout
 

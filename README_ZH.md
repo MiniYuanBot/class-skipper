@@ -9,7 +9,12 @@
 skill 在当前 agent 会话中分四步完成，可用时把独立任务交给原生子代理：
 
 1. **完整阅读与规划**：读取全部文本单元，并查看带页码的讲义缩略图拼版，补上文字提取
-   漏掉的图示和扫描页；规划 4–8 章，标注候选图和每个概念的主讲章节。
+   漏掉的图示和扫描页；规划 4–8 章，标注候选图和每个概念的主讲章节。有讲稿时，
+   以讲稿划定本讲范围：上一讲没讲完、本节课补讲的 PPT 归入本讲，本节课没讲到的
+   PPT 归入实际讲授它的那一讲，老师指定为拓展的后续内容照样整理并标为“拓展”。
+   打开可选开关 `thought_questions` 后，老师布置的思考题会放在对应概念旁，附提示
+   和折叠的解答；只有讲稿明确说到考试时才标“考试提示”；`output/questions.md`
+   汇总全课程的思考题。
 2. **逐章写作**：按固定模板写作，包括本节要点、动机 → 定义 → 机制 → 例题 → 易错点，
    用 Mermaid 画材料中描述的流程，用带标签的提示块区分补充内容，自测题答案默认折叠。
 3. **加入可视化**：裁剪讲义原图并查看裁剪结果确认；有联网能力时，附上经过核实的
@@ -61,6 +66,40 @@ python3 tools/install_skill.py
 在 Claude Code 中直接说“帮我把这几讲做成笔记”也会自动加载该 skill。skill 先运行
 `scripts/local.py doctor` 检查 Python，只把缺少的解析包（`pypdfium2`、`Pillow`、
 `python-docx`、`python-pptx`）安装到 `<课程>/workspace/.venv`。
+
+## 课程清单
+
+把一门课的原始材料放进 `<课程目录>/input/`，例如 `L02/slides.pdf` 和
+`L02/transcript.docx`。可选的 `input/course.yaml` 用来明确讲次配对、顺序和运行选项：
+复制 [`course.example.yaml`](skills/class-skipper/references/course.example.yaml)
+后修改即可。路径相对于清单文件。没有清单时，skill 按文件名配对，配对不清楚时会询问。
+
+```yaml
+schema_version: '1'
+title: 操作系统
+options:
+  thought_questions: true                  # 默认 false
+  thought_question_terms: [思考题, Think]   # 可选
+lectures:
+- id: l02
+  title: 操作系统的四个基本概念
+  slides: [L02/slides.pdf]
+  transcripts: [L02/transcript.docx]
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `title` | 课程名，显示在 `output/index.md` |
+| `lectures[].id` | 讲次编号，`l2`、`02`、`L02` 都会统一成 `L02` |
+| `lectures[].title` | 本讲主题，笔记标题为 `L02 主题` |
+| `lectures[].slides`、`transcripts` | 本讲的全部文件，可以有多个 |
+| `options` | 对所有讲次生效的运行选项；`lectures[].options` 可按讲覆盖 |
+| `options.thought_questions` | 整理老师布置的思考题，附提示、折叠解答和汇总 |
+| `options.thought_question_terms` | 老师对思考题的称呼，用于更精确地识别 |
+
+每讲只需列出本讲自己的 PPT。讲稿补讲了上一讲的 PPT 或提前讲了下一讲的内容时，
+skill 会自己读取相邻讲次的 PPT，由讲稿决定每讲笔记的范围。修改选项会让该讲重新
+生成，你手工改过的笔记仍然受保护。
 
 ## 目录结构
 

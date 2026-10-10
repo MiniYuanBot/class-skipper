@@ -31,7 +31,17 @@ to Chinese; English sources are explained in Chinese with English terms kept.
 >    background not in the source, `[!tip] 课堂强调` for instructor emphasis that
 >    the transcript actually states, `[!warning] 易错点` for real misconceptions,
 >    `[!example]` for a worked problem. Never invent instructor statements or exam
->    hints, and never present supplements as source content.
+>    hints, and never present supplements as source content. Write only what the
+>    plan's `scope` assigns to this lecture: open `extension` material with
+>    `> [!info] 拓展内容` (left by the instructor for self-study) and `slide-only`
+>    material with `> [!info] 依据讲义整理` (not explained in class), then explain
+>    it as fully as taught material. Skip `deferred` and `pending` pages.
+>    When the plan lists thought questions, write each beside its concept as
+>    `> [!question] 思考题：题目简述`, adding `（老师提示：考试可能出）` only for
+>    `exam: true`: the full question, a visible `**提示**：` line that points the
+>    way without solving it, and a nested `> > [!success]- 解答（老师课上给出）`,
+>    `（PPT 给出）` or `（据课程内容整理）` with the complete solution. Only an answer
+>    the instructor or slides actually give may carry the first two labels.
 > 7. Rewrite classroom narration (“老师讲了……”, “PPT 展示……”, “本页介绍……”) into
 >    direct knowledge statements. Keep provenance in `[^unit-id]` markers on key
 >    numbers, formulas, definitions and corrected source errors only.

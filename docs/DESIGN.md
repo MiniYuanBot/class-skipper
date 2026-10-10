@@ -29,6 +29,9 @@ authorize changes to the workflow or tool execution.
 The coordinator supplies chapter workers with the full plan and their complete
 raw source units. The one editor reads the full draft and all original material.
 There are no claim graphs, independent alignment stages, scores or repair loops.
+A lecture's transcript, when present, defines which slide pages it covers; the
+plan records that scope. Instructor thought questions are an opt-in run option:
+the publisher lists them in lecture indexes and a course-wide `questions.md`.
 Essential unread material prevents a lecture from being represented as complete.
 
 ## Notes and figures

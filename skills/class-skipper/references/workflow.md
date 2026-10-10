@@ -49,9 +49,9 @@ directories use uppercase `LXX`, padded to at least two digits.
   .obsidian/                    Existing vault configuration; never modify
   computer-organization-and-architecture/  <root>: one course
     input/                      User source files only
-      course.yaml               Optional manifest; paths relative to this file
+      course.yaml               Optional manifest; paths and run options
       L02/slides.pdf
-      L02/transcript.docx
+      L02/transcript.docx       Defines L02's scope; may finish L01's deck
     workspace/                  Private intermediates
       course.json               Course-root identity and layout marker
       L02/<run-id>/
@@ -73,6 +73,7 @@ directories use uppercase `LXX`, padded to at least two digits.
       exports/                  Export receipts and conflict candidates
     output/                     Final notes for this course only
       index.md                  Ordered lecture navigation
+      questions.md              Thought-question summary, only when any exist
       L02/
         index.md                Introduction, chapter links with summaries, synthesis
         chapters/01-process-model.md  One note per section: NN + English slug
@@ -129,9 +130,51 @@ Plan response (`plan.json`):
 ```json
 {"schema_version":1,"title":"L03 运算与流水线","learning_thread":"...","topics":["..."],
  "sections":[{"id":"section-1","title":"01 整数运算电路","slug":"integer-arithmetic","goal":"...","key_points":["..."],
-   "source_ids":["s1p3","s2b1"],"figure_ids":["s1p7"],"owns":["行波进位加法器","溢出检测"]}],
+   "source_ids":["s1p30","s2p3","s4b1"],"figure_ids":["s2p7"],"owns":["行波进位加法器","溢出检测"]}],
+ "scope":{"basis":"transcript","ranges":[
+   {"source":"s1","pages":"28-34","status":"taught","evidence":["s4b1","s4b2"]},
+   {"source":"s2","pages":"1-21","status":"taught","evidence":["s4b3","s4b18"]},
+   {"source":"s2","pages":"22-25","status":"extension","evidence":["s4b19"]},
+   {"source":"s2","pages":"26-40","status":"deferred","to":"L04"}]},
+ "questions":[{"id":"q1","section":"section-1","text":"题目原文","source_ids":["s2p14","s4b31"],
+   "exam":true,"exam_evidence":["s4b32"],"answer":"transcript","answer_ids":["s4b40"]}],
  "omitted":"..."}
 ```
+
+`scope` records which slide pages this lecture covers (SKILL.md, Lecture scope).
+In the example, `s1` is the previous lecture's deck, `s2` this lecture's own deck
+and `s4` its transcript.
+`basis` is `transcript`, or `slides` when the lecture has no transcript (then one
+`taught` range spans its own deck). Each range names a source ID and an inclusive
+page range; together they list every page of the lecture's own deck exactly once,
+plus the adjacent-deck pages this transcript teaches. `status` is `taught`,
+`extension`, `deferred` (with `to`, the lecture that teaches it), `pending` or
+`slide-only`; `evidence` lists the transcript units behind `taught` and
+`extension`. Chapter `source_ids` and `figure_ids` use only `taught`,
+`extension` and `slide-only` pages. A later lecture reads this scope to pick up
+`deferred` and `pending` pages and to recognize recaps.
+
+`questions` appears only when the `thought_questions` option is true (SKILL.md,
+Thought questions). `answer` is `transcript`, `slides` or `none`; `answer_ids`
+locate a given answer, which may come from a later lecture's transcript.
+`exam_evidence` lists the transcript units that state the exam link and is empty
+when `exam` is false. A later lecture reads earlier plans' `questions` to place
+answers it gives to them.
+
+Run options come from `prepare --options` and the manifest
+([course.example.yaml](course.example.yaml) is a complete example):
+
+```yaml
+options:                       # whole course
+  thought_questions: true      # default false
+  thought_question_terms: [思考题, Think]   # optional
+lectures:
+- id: l05
+  options:
+    thought_questions: false   # one lecture overrides a course option
+```
+
+Options are part of the run identity, so changing them starts a new run.
 
 `slug` is the English file-name stem for the chapter: lowercase ASCII words
 joined by hyphens, at most ten words, translating the Chinese title (for example
@@ -192,10 +235,13 @@ After the editor's response is applied, write `final/document.json`:
 {"schema_version":1,"title":"L03 运算与流水线","introduction":"导读","synthesis":"本讲小结",
  "sections":[{"id":"section-1","title":"01 整数运算电路","slug":"integer-arithmetic","summary":"一句话摘要",
    "markdown":"> [!abstract] 本节要点\n> - ...\n\n### 核心概念\n\n正文","source_ids":["s1p3"]}],
+ "questions":[{"id":"q1","section_id":"section-1","title":"题目简述","exam":true,"exam_evidence":["s4b32"]}],
  "uncertainties":[]}
 ```
 
-Section order is the final reading order. IDs are unique and stable. Then run the
+Section order is the final reading order. IDs are unique and stable.
+`questions` is omitted or empty unless the run's `thought_questions` option is
+true; each `title` is a one-line summary used in the summaries. Then run the
 format check once and fix every reported item directly in `final/document.json`:
 
 ```text
@@ -204,7 +250,9 @@ format check once and fix every reported item directly in `final/document.json`:
 
 `check` reports mechanical problems only: title formats, missing summaries or
 slugs, heading levels, bold-label boundaries, math/code delimiters, unknown
-footnote IDs, missing self-tests, unresolved or ambiguous chapter references,
+footnote IDs, missing self-tests (a `思考题` callout is not a self-test),
+thought questions without their section callout or with an exam hint lacking
+transcript evidence, unresolved or ambiguous chapter references,
 image syntax, Unicode math substitutes and math in image alt text. It includes
 prose, summaries and lecture introduction/synthesis where applicable. Symbol
 choice and formula meaning remain the writer's and single editor's work. Fix
@@ -283,7 +331,13 @@ no next link; links never wrap or cross lectures.
 
 The lecture index contains its title, `[课程目录](../index.md)`, the introduction,
 `## 章节导航` with one line per chapter (`- [01 进程模型](chapters/01-process-model.md)：summary`),
-`## 本讲小结`, `## 不确定事项` only when material issues remain, and the collapsed
-source list. The course `output/index.md` lists lectures in publication order, e.g.
-`- [L02 性能与指令集](L02/index.md)`. Standard Markdown links, LaTeX, footnotes,
+`## 思考题汇总` only when the lecture has thought questions
+(`- [02 线程](chapters/02-threads.md)：题目简述 · **考试提示**`, the marker only
+for exam hints), `## 本讲小结`, `## 不确定事项` only when material issues remain,
+and the collapsed source list. The course `output/index.md` lists lectures in
+publication order, e.g. `- [L02 性能与指令集](L02/index.md)`. When any lecture has
+thought questions, it starts with `[思考题汇总](questions.md)`, and
+`output/questions.md` (type `question-index`) groups every lecture's questions
+under an H2 lecture title with the same lines; it is removed again when no
+published lecture has any. Standard Markdown links, LaTeX, footnotes,
 callouts and Mermaid render in Obsidian without plugins.

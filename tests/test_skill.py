@@ -405,6 +405,133 @@ class OfflineSkillTests(unittest.TestCase):
                 (target / "output" / relative).read_bytes(), (output / relative).read_bytes()
             )
 
+    def question_document(self, questions, thought=True):
+        options = {"course_name": "演示课程", "thought_questions": thought}
+        prepared = self.prepare("--transcript", self.text, "--options", json.dumps(options))
+        sections = [
+            model_section(),
+            model_section(
+                "threads",
+                "02 线程",
+                "threads",
+                "知识正文。\n\n> [!question] 思考题：线程何时切换？\n> 题目。\n>\n"
+                "> **提示**：看调度时机。\n>\n> > [!success]- 解答（据课程内容整理）\n> > 答案。",
+            ),
+        ]
+        document = self.write_json(
+            "document.json",
+            {
+                "schema_version": 1,
+                "title": "L01 课程标题",
+                "introduction": "导读。",
+                "synthesis": "小结。",
+                "uncertainties": [],
+                "sections": sections,
+                "questions": questions,
+            },
+        )
+        return prepared, document
+
+    def test_thought_questions_build_lecture_and_course_summaries(self):
+        """Labeled model double: questions come from a hand-written document."""
+        question = {
+            "id": "q1",
+            "section_id": "threads",
+            "title": "线程何时切换？",
+            "exam": True,
+            "exam_evidence": ["s2b1"],
+        }
+        prepared, document = self.question_document([question])
+        checked = self.cli("check", "--run", prepared["run"], "--document", document)
+        self.assertEqual(checked["status"], "ok", checked)
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        output = self.root / "output"
+        line = "- [02 线程](chapters/02-threads.md)：线程何时切换？ · **考试提示**"
+        lecture = (output / "L01/index.md").read_text(encoding="utf-8")
+        self.assertIn("## 思考题汇总\n\n" + line, lecture)
+        self.assertLess(lecture.index("## 章节导航"), lecture.index("## 思考题汇总"))
+        self.assertLess(lecture.index("## 思考题汇总"), lecture.index("## 本讲小结"))
+        summary = (output / "questions.md").read_text(encoding="utf-8")
+        self.assertIn('type: "question-index"', summary)
+        grouped = line.replace("](chapters/", "](L01/chapters/")
+        self.assertIn("## L01 课程标题\n\n" + grouped, summary)
+        course = (output / "index.md").read_text(encoding="utf-8")
+        self.assertIn("[思考题汇总](questions.md)", course)
+        self.assert_local_links(output)
+        exported = self.cli(
+            "export",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--vault",
+            self.base / "vault",
+            "--course-name",
+            "课程",
+        )
+        self.assertTrue((Path(exported["target"]) / "output/questions.md").is_file())
+
+        _, document = self.question_document([])
+        self.cli("publish", "--run", prepared["run"], "--document", document)
+        self.assertFalse((output / "questions.md").exists())
+        self.assertNotIn("思考题汇总", (output / "index.md").read_text(encoding="utf-8"))
+        self.assertNotIn("思考题汇总", (output / "L01/index.md").read_text(encoding="utf-8"))
+
+    def test_thought_question_checks_are_mechanical(self):
+        question = {"id": "q1", "section_id": "threads", "title": "线程何时切换？"}
+        prepared, document = self.question_document(
+            [question | {"exam": True, "exam_evidence": ["s1b1"]}]
+        )
+        messages = [
+            item["message"]
+            for item in self.cli("check", "--run", prepared["run"], "--document", document)[
+                "issues"
+            ]
+        ]
+        self.assertTrue(any("exam_evidence" in message for message in messages), messages)
+        self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+
+        prepared, document = self.question_document([question | {"section_id": "concept"}])
+        messages = [
+            item["message"]
+            for item in self.cli("check", "--run", prepared["run"], "--document", document)[
+                "issues"
+            ]
+        ]
+        self.assertTrue(any("思考题 callout" in message for message in messages), messages)
+
+        prepared, document = self.question_document([question], thought=False)
+        self.cli("publish", "--run", prepared["run"], "--document", document, expected=2)
+        self.cli(
+            "prepare",
+            "--root",
+            self.root,
+            "--course",
+            "demo",
+            "--lecture",
+            "02",
+            "--title",
+            "课程标题",
+            "--slides",
+            self.text,
+            "--options",
+            '{"thought_questions":"yes"}',
+            expected=2,
+        )
+
+    def test_thought_question_callout_is_not_a_self_test(self):
+        prepared = self.prepare()
+        section = model_section()
+        section["markdown"] = "### 定义\n\n正文。\n\n> [!question] 思考题：为什么？\n> 题目。"
+        document = self.document([section])
+        messages = [
+            item["message"]
+            for item in self.cli("check", "--run", prepared["run"], "--document", document)[
+                "issues"
+            ]
+        ]
+        self.assertIn("Missing [!question] self-test callout.", messages)
+
     def test_single_chapter_has_no_neighbor_links(self):
         prepared = self.prepare()
         document = self.document(

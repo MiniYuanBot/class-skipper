@@ -1,0 +1,30 @@
+# Example course manifest. Copy it to <course-folder>/input/course.yaml and edit.
+# Paths are relative to the manifest. The manifest is optional: without it the
+# skill pairs slides and transcripts by file name and asks when that is unclear.
+# List only each lecture's own deck: when a transcript finishes the previous deck
+# or starts the next one, the skill reads the adjacent decks itself.
+schema_version: '1'
+title: 操作系统                     # course name shown in output/index.md
+options:                           # run options for every lecture (optional)
+  thought_questions: true          # write instructor thought questions; default false
+  thought_question_terms: [思考题, Think]  # optional: what this instructor calls them
+lectures:                          # processed in this order
+- id: l02                          # stored as L02
+  title: 操作系统的四个基本概念
+  slides:
+  - L02/slides.pdf
+  transcripts:
+  - L02/transcript.docx
+- id: l03
+  title: 进程、系统调用与 fork
+  slides:                          # several decks or transcripts are allowed
+  - L03/slides-part1.pdf
+  - L03/slides-part2.pdf
+  transcripts:
+  - L03/transcript.docx
+- id: l04
+  title: 一切皆文件
+  slides:
+  - L04/slides.pdf                 # no transcript: the deck alone defines the scope
+  options:
+    thought_questions: false       # a lecture's options override the course's

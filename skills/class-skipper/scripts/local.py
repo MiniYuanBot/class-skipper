@@ -20,6 +20,8 @@ REMOTE = re.compile(r"^https?://", re.IGNORECASE)
 FOOTNOTE = re.compile(r"\[\^([^\]\s]+)\](?!:)")
 DEFINITION = re.compile(r"^\[\^([^\]\s]+)\]:", re.MULTILINE)
 ENGLISH_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+){0,9}")
+QUESTION_CALLOUT = re.compile(r"^>\s*\[!question\][-+]?[ \t]*(.*)$", re.MULTILINE)
+THOUGHT_TITLE = "思考题"
 
 
 def portable_id(parent, value):
@@ -82,6 +84,11 @@ def prepare(args):
     options = json.loads(raw)
     if not isinstance(options, dict):
         raise ValueError("Options must be a JSON object.")
+    if not isinstance(options.get("thought_questions", False), bool):
+        raise ValueError("thought_questions must be true or false.")
+    terms = options.get("thought_question_terms", [])
+    if not isinstance(terms, list) or any(not isinstance(t, str) or not t.strip() for t in terms):
+        raise ValueError("thought_question_terms must be a list of non-empty strings.")
     if args.course_name:
         options["course_name"] = args.course_name
     identity = {
@@ -735,16 +742,79 @@ def markdown_issues(body, units):
         issues.append((0, "Unclosed fenced code block."))
     if math % 2:
         issues.append((0, "Unbalanced $$ display-math delimiters."))
-    if "[!question]" not in body:
+    if not any(not title.startswith(THOUGHT_TITLE) for title in QUESTION_CALLOUT.findall(body)):
         issues.append((0, "Missing [!question] self-test callout."))
     return issues + math_issues(body)
+
+
+def question_issues(questions, sections, units, options):
+    """Mechanical checks for instructor thought questions in final/document.json."""
+    if not isinstance(questions, list):
+        return ["questions must be a list."]
+    if questions and not options.get("thought_questions"):
+        return ["Thought questions are disabled for this run; remove questions."]
+    issues, ids = [], set()
+    bodies = {
+        slug(section["id"]): text(section.get("markdown", ""))
+        for section in sections
+        if isinstance(section, dict) and isinstance(section.get("id"), str)
+    }
+    for position, question in enumerate(questions, 1):
+        name = f"question {position}"
+        if not isinstance(question, dict):
+            issues.append(f"{name}: must be an object.")
+            continue
+        question_id = question.get("id")
+        if not isinstance(question_id, str) or not question_id or question_id in ids:
+            issues.append(f"{name}: needs a unique string id.")
+        ids.add(question_id)
+        title = question.get("title")
+        if not isinstance(title, str) or not title.strip() or "\n" in title.strip():
+            issues.append(f"{name}: needs a one-line title.")
+        else:
+            issues += [f"{name} title: {message}" for _, message in math_issues(title)]
+        section_id = question.get("section_id")
+        body = bodies.get(slug(section_id)) if isinstance(section_id, str) else None
+        if body is None:
+            issues.append(f"{name}: section_id must name a final section.")
+        elif not any(
+            callout.startswith(THOUGHT_TITLE) for callout in QUESTION_CALLOUT.findall(body)
+        ):
+            issues.append(f"{name}: its section has no [!question] 思考题 callout.")
+        exam = question.get("exam", False)
+        evidence = question.get("exam_evidence", [])
+        if not isinstance(exam, bool) or not isinstance(evidence, list):
+            issues.append(f"{name}: exam is true/false and exam_evidence a list.")
+        elif exam and (
+            not evidence
+            or any(
+                not isinstance(ref, str) or units.get(ref, {}).get("role") != "transcript"
+                for ref in evidence
+            )
+        ):
+            issues.append(f"{name}: an exam hint needs transcript units in exam_evidence.")
+    return issues
+
+
+def question_line(item, prefix=""):
+    line = f"- [{label(item['chapter'])}]({prefix}chapters/{item['file']})：{label(item['title'])}"
+    return line + (" · **考试提示**" if item["exam"] else "")
 
 
 def check(args):
     run, metadata = get_run(args.run)
     document = read_json(args.document)
-    units = {unit["id"] for unit in read_json(run / "materials.json")["units"]}
-    issues = []
+    materials = {unit["id"]: unit for unit in read_json(run / "materials.json")["units"]}
+    units = set(materials)
+    issues = [
+        {"section": None, "line": 0, "message": message}
+        for message in question_issues(
+            document.get("questions", []),
+            document.get("sections", []),
+            materials,
+            metadata["options"],
+        )
+    ]
     if not LECTURE_TITLE.fullmatch(text(document.get("title", ""))):
         issues.append({"section": None, "line": 0, "message": "Lecture title must be LXX Topic."})
     context = None
@@ -818,6 +888,20 @@ def publish(args):
     uncertainties = [
         resolved_body(text(item), context, prefix + "index.md") for item in uncertainties
     ]
+    questions = document.get("questions", [])
+    problems = question_issues(questions, sections, units, metadata["options"])
+    if problems:
+        raise ValueError("Invalid thought questions: " + "; ".join(problems))
+    chapter_files = {section_id: (name, filename) for section_id, name, filename in targets}
+    question_items = [
+        {
+            "title": text(question["title"]),
+            "chapter": chapter_files[slug(question["section_id"])][0],
+            "file": chapter_files[slug(question["section_id"])][1],
+            "exam": question.get("exam", False),
+        }
+        for question in questions
+    ]
     chapters = []
     for section, (section_id, _, filename) in zip(sections, targets):
         body, chapter_title = text(section["markdown"]), text(section["title"])
@@ -867,9 +951,10 @@ def publish(args):
     parent_links = "[课程目录](../index.md)"
     if not course_layout:
         parent_links += " · [全部课程](../../index.md)"
-    lecture_body = (
-        f"{parent_links}\n\n{introduction}\n\n## 章节导航\n\n{links}\n\n## 本讲小结\n\n{synthesis}"
-    )
+    lecture_body = f"{parent_links}\n\n{introduction}\n\n## 章节导航\n\n{links}"
+    if question_items:
+        lecture_body += "\n\n## 思考题汇总\n\n" + "\n".join(map(question_line, question_items))
+    lecture_body += f"\n\n## 本讲小结\n\n{synthesis}"
     if uncertainties:
         lecture_body += "\n\n## 不确定事项\n\n" + "\n".join(
             "- " + text(item) for item in uncertainties
@@ -930,9 +1015,27 @@ def publish(args):
             if existing.casefold() == lecture.casefold() and existing != lecture:
                 raise ValueError("Lecture ID has a Windows case collision.")
         entry["lectures"][lecture] = {"title": title, "layout": "sections"}
+        if question_items:
+            entry["lectures"][lecture]["questions"] = question_items
         course_body = "\n".join(
             f"- [{label(item['title'])}]({key}/index.md)" for key, item in entry["lectures"].items()
         )
+        # The course-wide summary is rebuilt from every lecture's registry entry.
+        course_dir = "" if course_layout else course + "/"
+        question_groups = [
+            f"## {label(item['title'])}\n\n"
+            + "\n".join(question_line(question, key + "/") for question in item["questions"])
+            for key, item in entry["lectures"].items()
+            if item.get("questions")
+        ]
+        if question_groups:
+            course_body = "[思考题汇总](questions.md)\n\n" + course_body
+            files[course_dir + "questions.md"] = markdown_page(
+                "question-index",
+                {"course": course},
+                "思考题汇总",
+                "[课程目录](index.md)\n\n" + "\n\n".join(question_groups),
+            )
         if course_layout:
             files["index.md"] = markdown_page(
                 "course-index", {"course": course}, entry["name"], course_body
@@ -950,7 +1053,11 @@ def publish(args):
             files["index.md"] = markdown_page("library-index", {}, "课程目录", root_body)
         receipt = managed(base, "published.json")
         previous = read_json(receipt).get("files", {}) if receipt.exists() else {}
-        remove = {name for name in previous if name.startswith(prefix)} - set(files)
+        remove = {
+            name
+            for name in previous
+            if name.startswith(prefix) or name == course_dir + "questions.md"
+        } - set(files)
         result, code = sync_files(target, files, receipt, base / "candidates", remove=remove)
         if not code:
             write_json(registry_path, registry)
