@@ -8,7 +8,20 @@ title: 操作系统                     # course name shown in output/index.md
 options:                           # run options for every lecture (optional)
   thought_questions: true          # write instructor thought questions; default false
   thought_question_terms: [思考题, Think]  # optional: what this instructor calls them
-lectures:                          # processed in this order
+models:                            # subagent models (optional; not a run option)
+  # Omit `models`, a host section, a role or a field to use the session's own
+  # model and effort. The coordinator is always the session you started.
+  # Roles: workers (default for reader, writer, figure, links), reader, writer,
+  # figure, links, editor (falls back to the session, not to workers).
+  # A value is a model string or {model: ..., effort: ...}.
+  claude:                          # Claude Code: only the aliases opus | sonnet | haiku | fable
+    workers: {model: sonnet, effort: xhigh}   # (not full IDs such as claude-sonnet-5-5)
+    editor: {model: opus, effort: xhigh}        # effort: low | medium | high | xhigh | max
+  codex:                           # Codex: a model ID the host lists
+    workers: {model: gpt-6.1-sol, effort: max}   # effort: low | medium | high |
+    editor: {model: gpt-6-astra, effort: max}      #   xhigh | max | ultra
+    links: {effort: low}           # same model as workers, lower effort
+lectures:                         # processed in this order
 - id: l02                          # stored as L02
   title: 操作系统的四个基本概念
   slides:

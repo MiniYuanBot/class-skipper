@@ -28,6 +28,13 @@ work to native subagents when available:
 4. **Revise once**: one editor fixes coverage, accuracy, repetition and format;
    a mechanical `check` lists Markdown problems to fix in the same pass.
 
+Subagents stay within a fixed budget (at most chapters + 3 per lecture): one
+writer per chapter, all started at once, with figure and link workers running in
+parallel with writing. By default every subagent uses the current session's
+model and effort; the manifest's `models` key (see [Course manifest](#course-manifest))
+or the request can set cheaper ones per role. Requests and cache keys record the
+model and effort actually used.
+
 Local Python helpers only parse documents, render pages, cache responses and
 publish files. No API key, `.env`, model SDK or external OCR is used; the host's
 normal sign-in and usage limits apply.
@@ -91,6 +98,13 @@ title: 操作系统
 options:
   thought_questions: true                  # default false
   thought_question_terms: [思考题, Think]   # optional
+models:                                    # optional; default: session model
+  claude:
+    workers: {model: sonnet, effort: medium}
+    editor: {model: opus, effort: high}
+  codex:
+    workers: {model: gpt-6.1-sol, effort: medium}
+    editor: {model: gpt-6-astra, effort: high}
 lectures:
 - id: l02
   title: 操作系统的四个基本概念
@@ -107,6 +121,18 @@ lectures:
 | `options` | Run options for every lecture; `lectures[].options` overrides them per lecture |
 | `options.thought_questions` | Write instructor thought questions with hints, folded solutions and summaries |
 | `options.thought_question_terms` | What this instructor calls them, for more precise matching |
+| `models.claude`, `models.codex` | Subagent models for that host; the session you start stays the coordinator |
+| `models.<host>.workers` | Default for `reader`, `writer`, `figure` and `links`, which can each be set separately |
+| `models.<host>.editor` | The single editor; falls back to the session model, not to `workers` |
+
+A model value is a string or `{model, effort}`. Claude Code accepts only the
+aliases `opus`, `sonnet`, `haiku` and `fable` (not full IDs such as
+`claude-sonnet-5-5`), with effort `low` to `max`. Codex takes a model ID the host
+lists, such as `gpt-6-astra` or `gpt-6.1-sol`, with effort `low` to `ultra`. Any
+role or field you leave out uses the session's own model and effort; an
+unavailable model falls back to the session model and is reported. `models` is
+not a run option, so changing it or switching hosts reuses the same run.
+Details: [models.md](skills/class-skipper/references/models.md).
 
 List only each lecture's own deck. When a transcript finishes the previous deck
 or starts the next one, the skill reads the adjacent decks itself, so the

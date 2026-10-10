@@ -174,7 +174,9 @@ lectures:
     thought_questions: false   # one lecture overrides a course option
 ```
 
-Options are part of the run identity, so changing them starts a new run.
+Options are part of the run identity, so changing them starts a new run. The
+manifest's top-level `models` key is not an option and is never passed to
+`prepare`; see [models.md](models.md).
 
 `slug` is the English file-name stem for the chapter: lowercase ASCII words
 joined by hyphens, at most ten words, translating the Chinese title (for example
@@ -206,8 +208,16 @@ complete before caching. Invalid or truncated responses stay uncached.
 Before each reasoning task, write `requests/<task-id>.json` with `schema_version`,
 `stage`, `instructions` (the actual full task prompt text, including the shared
 writing brief for writers and the editor), and `options` (language, title, target
-length, visual/revision choices and the model identity if exposed, otherwise
-`current-session`). Include or hash the current SKILL.md and reference files.
+length and visual/revision choices). For model selection, record `host`
+(`claude` or `codex`), `model_role` (`reader`, `writer`, `figure`, `links` or
+`editor`), `model` (the resolved alias or model ID) and `reasoning_effort` (the
+resolved effort), both resolved with [models.md](models.md) before lookup.
+Include `agent_type` when a configured role is selected and its file as an
+upstream. Use `current-session` only for confirmed inheritance whose exact value
+is hidden, or `host-default` for an unknown host-selected value. If either model or effort is unknown, also include
+`session_scope`: one unique marker per host session, renewed when its settings
+change. This allows reuse within an unchanged session without mixing unknown
+configurations across sessions. Include or hash the current SKILL.md and reference files.
 Include the actual upstream files: full plan + assigned raw units for writing;
 complete draft + plan + visual readings for revision; image + coordinates + raw
 context for visual reading.

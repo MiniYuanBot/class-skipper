@@ -73,9 +73,10 @@ Use short plain-text alt text, then a separate one-sentence caption paragraph
 saying what the figure shows and what to look at. Formulas belong in the caption
 as `$...$` LaTeX, never in image alt text, where they cannot reliably render.
 Keep field names such as `imm[0:5]` and `Instr[6-0]` intact; square brackets do not
-end a caption. Remove placeholders whose candidate was rejected. Delegate
-candidate batches to visual workers when the host can view images in subagents;
-otherwise the coordinator does this step.
+end a caption. Remove placeholders whose candidate was rejected. Delegate all
+candidates of a lecture to one figure reader when the host can
+view images in subagents; with only a few candidates, or without image viewing in
+subagents, the coordinator does this step.
 
 ## External visual resources (step 3)
 
@@ -101,6 +102,9 @@ an online CPU/pipeline simulator, or a library's official interactive demo).
 - Put the callout beside the concept it illustrates, not in a link dump at the
   end of the chapter.
 
+One link finder (with web tools) searches and fetches for the whole
+lecture from the plan and returns candidate links with what each page showed;
+the coordinator keeps only those that fit and writes the callouts.
 If the host has no web access, skip external resources and report that.
 
 ## Recording visual readings

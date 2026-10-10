@@ -22,6 +22,11 @@ skill 在当前 agent 会话中分四步完成，可用时把独立任务交给�
 4. **一次整体校订**：由一位编辑修正覆盖面、准确性、重复和格式；`check` 命令列出
    Markdown 机械问题，在同一次校订中改完。
 
+子代理数量有固定预算（每讲最多“章节数 + 3”个）：每章一个写作者，同时启动；读图和
+找链接的子代理与写作并行。默认所有子代理都使用当前会话的模型和推理强度；可以在
+课程清单的 `models` 字段（见[课程清单](#课程清单)）或请求中按角色指定更便宜的模型。
+任务请求与缓存键记录实际使用的模型和推理强度。
+
 本地 Python 脚本只负责解析文档、渲染页面、缓存回答和发布文件。不需要 API key、
 `.env`、模型 SDK 或外部 OCR；按宿主的正常登录状态和额度运行。
 
@@ -80,6 +85,13 @@ title: 操作系统
 options:
   thought_questions: true                  # 默认 false
   thought_question_terms: [思考题, Think]   # 可选
+models:                                    # 可选；默认使用当前会话模型
+  claude:
+    workers: {model: sonnet, effort: medium}
+    editor: {model: opus, effort: high}
+  codex:
+    workers: {model: gpt-6.1-sol, effort: medium}
+    editor: {model: gpt-6-astra, effort: high}
 lectures:
 - id: l02
   title: 操作系统的四个基本概念
@@ -96,6 +108,16 @@ lectures:
 | `options` | 对所有讲次生效的运行选项；`lectures[].options` 可按讲覆盖 |
 | `options.thought_questions` | 整理老师布置的思考题，附提示、折叠解答和汇总 |
 | `options.thought_question_terms` | 老师对思考题的称呼，用于更精确地识别 |
+| `models.claude`、`models.codex` | 该宿主下子代理使用的模型；你启动的会话始终是协调者 |
+| `models.<宿主>.workers` | `reader`、`writer`、`figure`、`links` 的默认值，四者也可单独设置 |
+| `models.<宿主>.editor` | 唯一的编辑；未设置时用会话模型，不继承 `workers` |
+
+模型值可以是字符串，也可以是 `{model, effort}`。Claude Code 只接受别名 `opus`、
+`sonnet`、`haiku`、`fable`（不接受 `claude-sonnet-5-5` 这类完整 ID），推理强度为
+`low` 到 `max`；Codex 填宿主列出的模型 ID，如 `gpt-6-astra`、`gpt-6.1-sol`，推理
+强度为 `low` 到 `ultra`。没写的角色或字段都使用当前会话的模型和推理强度；指定模型
+不可用时回退到会话模型并在报告中说明。`models` 不是运行选项，修改它或切换宿主仍沿用
+同一次运行。详见 [models.md](skills/class-skipper/references/models.md)。
 
 每讲只需列出本讲自己的 PPT。讲稿补讲了上一讲的 PPT 或提前讲了下一讲的内容时，
 skill 会自己读取相邻讲次的 PPT，由讲稿决定每讲笔记的范围。修改选项会让该讲重新
